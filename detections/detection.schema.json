@@ -66,6 +66,10 @@
           },
           "path": { "type": "string", "minLength": 1 },
           "body": { "type": "string" },
+          "matchers-condition": {
+            "type": "string",
+            "enum": ["and", "or"]
+          },
           "matchers": {
             "type": "array",
             "minItems": 1,
@@ -76,7 +80,7 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["dsl", "word", "status"]
+                  "enum": ["dsl", "word", "status", "regex", "binary"]
                 },
                 "dsl": {
                   "type": "array",
@@ -89,7 +93,20 @@
                 "status": {
                   "type": "array",
                   "items": { "type": "integer" }
-                }
+                },
+                "regex": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "binary": {
+                  "type": "array",
+                  "items": { "type": "string", "pattern": "^(0x)?[0-9a-fA-F]+$" }
+                },
+                "part": {
+                  "type": "string",
+                  "enum": ["body", "header"]
+                },
+                "negative": { "type": "boolean" }
               },
               "allOf": [
                 {
@@ -103,6 +120,14 @@
                 {
                   "if": { "properties": { "type": { "const": "status" } } },
                   "then": { "required": ["status"] }
+                },
+                {
+                  "if": { "properties": { "type": { "const": "regex" } } },
+                  "then": { "required": ["regex"] }
+                },
+                {
+                  "if": { "properties": { "type": { "const": "binary" } } },
+                  "then": { "required": ["binary"] }
                 }
               ]
             }

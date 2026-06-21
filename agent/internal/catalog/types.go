@@ -126,18 +126,26 @@ type Match struct {
 
 // HTTPStep is one request + matcher set for the nuclei engine.
 type HTTPStep struct {
-	Method   string    `json:"method"`
-	Path     string    `json:"path"`
-	Body     string    `json:"body,omitempty"`
-	Matchers []Matcher `json:"matchers"`
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Body   string `json:"body,omitempty"`
+	// MatchersCondition combines the step's matchers: "and" (default) | "or".
+	MatchersCondition string    `json:"matchers-condition,omitempty"`
+	Matchers          []Matcher `json:"matchers"`
 }
 
-// Matcher evaluates a response. Type is "dsl" | "word" | "status".
+// Matcher evaluates a response. Type is "dsl" | "word" | "status" | "regex" |
+// "binary". Part selects "body" (default) or "header"; Negative inverts the
+// result.
 type Matcher struct {
-	Type   string   `json:"type"`
-	DSL    []string `json:"dsl,omitempty"`
-	Words  []string `json:"words,omitempty"`
-	Status []int    `json:"status,omitempty"`
+	Type     string   `json:"type"`
+	DSL      []string `json:"dsl,omitempty"`
+	Words    []string `json:"words,omitempty"`
+	Status   []int    `json:"status,omitempty"`
+	Regex    []string `json:"regex,omitempty"`
+	Binary   []string `json:"binary,omitempty"`
+	Part     string   `json:"part,omitempty"`
+	Negative bool     `json:"negative,omitempty"`
 }
 
 // ---- findings ----

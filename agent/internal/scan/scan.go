@@ -107,7 +107,7 @@ func (s *Scanner) runNuclei(ctx context.Context, base, assetID string, det catal
 		resp.Body.Close()
 		// raw stays local; it is never sent upstream.
 
-		matched, key := evalMatchers(step.Matchers, response{
+		matched, key := evalMatchers(step.Matchers, step.MatchersCondition, response{
 			status:  resp.StatusCode,
 			body:    raw,
 			header:  resp.Header,
@@ -129,15 +129,18 @@ func (s *Scanner) runNuclei(ctx context.Context, base, assetID string, det catal
 	return Finding{}, false
 }
 
-// evalMatchers evaluates a step's wire matchers against a response. Wire
-// matchers are ANDed (nuclei default); the expanded matcher model and the
-// or-condition combinator are reached via evalMatcherSet (see dsl.go).
-func evalMatchers(ms []catalog.Matcher, r response) (bool, string) {
+// evalMatchers evaluates a step's wire matchers against a response under the
+// step's matcher-condition ("and" default | "or"). The expanded matcher model
+// (regex/binary, part selector, negative) is reached via evalMatcherSet (dsl.go).
+func evalMatchers(ms []catalog.Matcher, cond string, r response) (bool, string) {
 	conv := make([]matcher, len(ms))
 	for i, m := range ms {
 		conv[i] = fromCatalog(m)
 	}
-	return evalMatcherSet(conv, condAnd, r)
+	if cond == "" {
+		cond = condAnd
+	}
+	return evalMatcherSet(conv, cond, r)
 }
 
 // evalDSL evaluates a single dsl expression for a duration-only response. It is

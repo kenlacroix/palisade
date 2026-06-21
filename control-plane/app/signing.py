@@ -27,7 +27,23 @@ def _matcher_values(matcher: dict) -> str:
         return ",".join(matcher.get("words") or [])
     if t == "status":
         return ",".join(str(c) for c in (matcher.get("status") or []))
+    if t == "regex":
+        return ",".join(matcher.get("regex") or [])
+    if t == "binary":
+        return ",".join(matcher.get("binary") or [])
     return ""
+
+
+def _matcher_key(matcher: dict) -> str:
+    # "type:values" plus "|part=" for a non-default part and "|neg" for a
+    # negative matcher. Must match the Go verifier's matchersString byte for byte.
+    key = matcher.get("type", "") + ":" + _matcher_values(matcher)
+    part = matcher.get("part") or ""
+    if part and part != "body":
+        key += "|part=" + part
+    if matcher.get("negative"):
+        key += "|neg"
+    return key
 
 
 def _http_field(det: dict) -> str:
@@ -38,10 +54,12 @@ def _http_field(det: dict) -> str:
         method = step.get("method", "")
         path = step.get("path", "")
         body = step.get("body") or ""
-        matchers = GS.join(
-            (m.get("type", "") + ":" + _matcher_values(m)) for m in (step.get("matchers") or [])
-        )
-        steps.append(method + SP + path + SP + body + SP + matchers)
+        matchers = GS.join(_matcher_key(m) for m in (step.get("matchers") or []))
+        step_str = method + SP + path + SP + body + SP + matchers
+        cond = step.get("matchers-condition") or ""
+        if cond and cond != "and":
+            step_str += SP + "cond=" + cond
+        steps.append(step_str)
     return RS.join(steps)
 
 

@@ -60,12 +60,20 @@ func httpString(d Detection) string {
 		sb.WriteString(step.Body)
 		sb.WriteByte(sepSP)
 		sb.WriteString(matchersString(step.Matchers))
+		// Only a non-default (or) condition extends the canonical form, so
+		// existing single-condition steps hash exactly as before.
+		if c := step.MatchersCondition; c != "" && c != "and" {
+			sb.WriteByte(sepSP)
+			sb.WriteString("cond=" + c)
+		}
 		steps = append(steps, sb.String())
 	}
 	return strings.Join(steps, string(rune(sepRS)))
 }
 
-// matchersString joins matchers by GS.
+// matchersString joins matchers by GS. Each matcher canonicalizes to
+// "type:values" plus a "|part=" suffix for a non-default part and "|neg" for a
+// negative matcher, so existing matchers hash exactly as before.
 func matchersString(ms []Matcher) string {
 	parts := make([]string, 0, len(ms))
 	for _, m := range ms {
@@ -81,10 +89,21 @@ func matchersString(ms []Matcher) string {
 				ss[i] = strconv.Itoa(code)
 			}
 			values = strings.Join(ss, ",")
+		case "regex":
+			values = strings.Join(m.Regex, ",")
+		case "binary":
+			values = strings.Join(m.Binary, ",")
 		default:
 			values = ""
 		}
-		parts = append(parts, m.Type+":"+values)
+		key := m.Type + ":" + values
+		if m.Part != "" && m.Part != "body" {
+			key += "|part=" + m.Part
+		}
+		if m.Negative {
+			key += "|neg"
+		}
+		parts = append(parts, key)
 	}
 	return strings.Join(parts, string(rune(sepGS)))
 }

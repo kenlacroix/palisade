@@ -31,7 +31,16 @@ type matcher struct {
 
 // fromCatalog widens a wire matcher to the scan model.
 func fromCatalog(m catalog.Matcher) matcher {
-	return matcher{Type: m.Type, DSL: m.DSL, Words: m.Words, Status: m.Status}
+	return matcher{
+		Type:     m.Type,
+		DSL:      m.DSL,
+		Words:    m.Words,
+		Status:   m.Status,
+		Regex:    m.Regex,
+		Binary:   m.Binary,
+		Part:     m.Part,
+		Negative: m.Negative,
+	}
 }
 
 // response is the part of an HTTP response matchers run against. Bodies stay
