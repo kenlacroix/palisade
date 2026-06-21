@@ -144,9 +144,11 @@ fingerprint → diff vs open → classify event → store.
  user silences ─────────────────▶ muted (ttl)
 ```
 
-*Implemented:* alert-rule evaluation runs inside the ingest transaction; both
-alert delivery and AI triage run in background tasks off the request path (not a
-queue/worker yet).
+*Implemented:* alert-rule evaluation runs inside the ingest transaction; alert
+delivery and AI triage are enqueued onto a durable Arq + Redis queue and run by
+a worker process (off the request path, with restart-survival and retries). When
+`REDIS_URL` is unset they fall back to in-process background tasks so dev/SQLite
+needs no Redis.
 
 **The boundary:** on-host = discovery + detection execution + raw evidence;
 across the wire = normalized assets + findings only; control plane =
@@ -249,7 +251,14 @@ references:
 signature: <minisign>
 ```
 
-Custom-module detections reference a compiled Go module by `spec_ref` instead of inline `http`.
+Custom-module detections reference a compiled Go module by `spec_ref` instead of
+inline `http`. *Implemented:* the agent resolves `spec_ref` against a registry of
+modules compiled into the binary, so the signed catalog only names a module and
+the trust boundary stays the agent binary — the control plane never ships code.
+First module: `modules/nextjs_middleware_bypass` (CVE-2025-29927), which confirms
+the bypass from the difference between two responses, logic a single nuclei
+matcher cannot express. Shipping modules as signed scripts in the bundle (dynamic
+distribution) is a planned follow-up.
 
 ---
 

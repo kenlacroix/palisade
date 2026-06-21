@@ -206,18 +206,29 @@ Channel config shapes: telegram `{bot_token, chat_id}`; email `{smtp_host,
 smtp_port, username, password, from, to}`; webhook `{url}`. Secret keys
 (`bot_token`, `password`, `username`) are redacted on read. On finding ingest,
 matching rules are evaluated inside the request transaction and matching alerts
-are delivered in a FastAPI `BackgroundTask` (`app/alerting.py:deliver_pending` +
-`app/notify.py` senders) so network I/O never blocks the agent. AI triage was
-moved off the request path into the same background mechanism.
+are enqueued for delivery (`app/alerting.py:deliver_pending` + `app/notify.py`
+senders) so network I/O never blocks the agent. AI triage is enqueued the same
+way. Both go onto the durable Arq queue when `REDIS_URL` is set, else a FastAPI
+`BackgroundTask`.
 
 ## Production TODOs
 
-- **Detection engine:** only the `nuclei` engine runs; `module` detections are
-  not yet executable.
-- **Queue/worker:** alerting delivery and AI triage run in FastAPI
-  `BackgroundTasks`; prod should offload to a real queue/worker (SPEC: Arq + Redis).
+- **Evidence at rest:** per-org encryption of `evidence` / raw payloads is not
+  yet implemented.
+- **Alert quiet hours:** rules support severity + event filters and per-finding
+  mute, but scheduled quiet hours are not yet implemented.
 
 ## Implemented
+
+- **Durable queue/worker:** AI triage and alert delivery run on an Arq + Redis
+  queue via a `worker` service (retries, restart-survival, horizontal API
+  scaling). One `queue.enqueue()` call site picks Arq when `REDIS_URL` is set and
+  an in-process `BackgroundTask` otherwise; a failed Redis enqueue runs inline
+  rather than dropping work. See `app/queue.py`, `app/worker.py`, `app/tasks.py`.
+- **Module detection engine:** the agent runs `engine:"module"` detections by
+  resolving `spec_ref` against a registry of modules compiled into the binary
+  (`agent/internal/scan/module.go`); the signed catalog only references a module
+  by name. First module is the Next.js middleware bypass, CVE-2025-29927.
 
 - **Agent mTLS:** enroll issues an EC P-256 client cert from an internal CA;
   `require_agent` verifies the proxy-forwarded cert against the CA and maps the

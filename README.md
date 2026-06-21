@@ -185,8 +185,11 @@ enroll tokens, Postgres row-level security per `org_id`), alerting
 internal CA; verified at a TLS-terminating proxy, with the bearer `agent_secret`
 as the plaintext-demo fallback), and a `SECURITY DEFINER` path so the
 cross-tenant catalog aggregate (`tenants_hit` / `tenants_total`) is correct under
-RLS on Postgres. Production TODOs (see `SPEC.md` and inline `TODO(prod)`
-markers): the `module` detection engine and a real queue/worker in place of
-FastAPI background tasks.
+RLS on Postgres, a durable **Arq + Redis** queue/worker for AI triage and
+alert delivery (with an in-process `BackgroundTasks` fallback when `REDIS_URL`
+is unset), and a pluggable **`module` detection engine** (a compiled `spec_ref`
+registry in the agent; first module is the Next.js middleware bypass,
+CVE-2025-29927). Production TODOs (see `SPEC.md` and inline `TODO(prod)`
+markers): per-org encryption of evidence at rest and alert quiet hours.
 </content>
 </invoke>
