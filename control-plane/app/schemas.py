@@ -226,6 +226,11 @@ class RescanResponse(BaseModel):
     agents_nudged: int
 
 
+class ExternalScanResponse(BaseModel):
+    enqueued: bool
+    external_assets: int
+
+
 class DetectionRow(BaseModel):
     slug: str
     title: str
