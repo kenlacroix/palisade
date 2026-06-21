@@ -11,7 +11,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -108,7 +107,12 @@ func (s *Scanner) runNuclei(ctx context.Context, base, assetID string, det catal
 		resp.Body.Close()
 		// raw stays local; it is never sent upstream.
 
-		matched, key := evalMatchers(step.Matchers, resp.StatusCode, raw, elapsed)
+		matched, key := evalMatchers(step.Matchers, response{
+			status:  resp.StatusCode,
+			body:    raw,
+			header:  resp.Header,
+			elapsed: elapsed,
+		})
 		if !matched {
 			continue
 		}
@@ -125,100 +129,20 @@ func (s *Scanner) runNuclei(ctx context.Context, base, assetID string, det catal
 	return Finding{}, false
 }
 
-// evalMatchers returns whether all matchers pass and the first matcher key
-// used for the fingerprint. Matchers are ANDed (nuclei default).
-func evalMatchers(ms []catalog.Matcher, status int, body []byte, elapsed time.Duration) (bool, string) {
-	if len(ms) == 0 {
-		return false, ""
+// evalMatchers evaluates a step's wire matchers against a response. Wire
+// matchers are ANDed (nuclei default); the expanded matcher model and the
+// or-condition combinator are reached via evalMatcherSet (see dsl.go).
+func evalMatchers(ms []catalog.Matcher, r response) (bool, string) {
+	conv := make([]matcher, len(ms))
+	for i, m := range ms {
+		conv[i] = fromCatalog(m)
 	}
-	firstKey := ""
-	for _, m := range ms {
-		ok, key := evalMatcher(m, status, body, elapsed)
-		if !ok {
-			return false, ""
-		}
-		if firstKey == "" {
-			firstKey = key
-		}
-	}
-	return true, firstKey
+	return evalMatcherSet(conv, condAnd, r)
 }
 
-func evalMatcher(m catalog.Matcher, status int, body []byte, elapsed time.Duration) (bool, string) {
-	switch m.Type {
-	case "dsl":
-		for _, expr := range m.DSL {
-			if !evalDSL(expr, elapsed) {
-				return false, ""
-			}
-		}
-		return true, "dsl:" + strings.Join(m.DSL, ",")
-	case "word":
-		text := string(body)
-		for _, w := range m.Words {
-			if !strings.Contains(text, w) {
-				return false, ""
-			}
-		}
-		return true, "word:" + strings.Join(m.Words, ",")
-	case "status":
-		for _, code := range m.Status {
-			if code == status {
-				return true, "status:" + strconv.Itoa(status)
-			}
-		}
-		return false, ""
-	default:
-		log.Printf("scan: unknown matcher type %q, treating as no-match", m.Type)
-		return false, ""
-	}
-}
-
-// evalDSL supports duration comparisons of the form "duration>=N",
-// "duration>N", "duration<=N", "duration<N", "duration==N" where N is seconds
-// (int or float). This is the subset needed for time-based detections (e.g.
-// blind SQLi sleep payloads). Anything else is unsupported and fails closed.
-//
-// TODO(dsl): expand to the full nuclei DSL (string/header helpers, logic ops).
+// evalDSL evaluates a single dsl expression for a duration-only response. It is
+// retained as a thin wrapper over the full evaluator (see evalDSLExpr in
+// dsl.go) for duration-based callers and tests.
 func evalDSL(expr string, elapsed time.Duration) bool {
-	expr = strings.ReplaceAll(expr, " ", "")
-	const key = "duration"
-	if !strings.HasPrefix(expr, key) {
-		log.Printf("scan: unsupported dsl expression %q", expr)
-		return false
-	}
-	rest := expr[len(key):]
-
-	var op string
-	for _, candidate := range []string{">=", "<=", "==", ">", "<"} {
-		if strings.HasPrefix(rest, candidate) {
-			op = candidate
-			break
-		}
-	}
-	if op == "" {
-		log.Printf("scan: unsupported dsl operator in %q", expr)
-		return false
-	}
-
-	want, err := strconv.ParseFloat(rest[len(op):], 64)
-	if err != nil {
-		log.Printf("scan: bad dsl threshold in %q: %v", expr, err)
-		return false
-	}
-
-	got := elapsed.Seconds()
-	switch op {
-	case ">=":
-		return got >= want
-	case "<=":
-		return got <= want
-	case "==":
-		return got == want
-	case ">":
-		return got > want
-	case "<":
-		return got < want
-	}
-	return false
+	return evalDSLExpr(expr, response{elapsed: elapsed})
 }
