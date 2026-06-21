@@ -60,10 +60,16 @@ func (s *Scanner) RunTarget(ctx context.Context, base string, t catalog.ScanTarg
 			continue
 		}
 		if det.Engine == "module" {
-			// TODO(module-engine): execute the compiled Go module referenced
-			// by det.SpecRef. Custom modules cover multi-step logic Nuclei
-			// cannot express (auth-bypass chains, stateful PoCs).
-			log.Printf("scan: detection %q uses module engine (spec_ref=%q): module engine not implemented", det.ID, det.SpecRef)
+			// Module detections run compiled multi-step logic referenced by
+			// spec_ref. The module ships in this binary, not the catalog.
+			mod, ok := lookupModule(det.SpecRef)
+			if !ok {
+				log.Printf("scan: detection %q references module %q which is not registered, skipping", det.ID, det.SpecRef)
+				continue
+			}
+			if f, ok := mod.Run(ctx, ModuleEnv{Base: base, AssetID: t.AssetID, Det: det, HC: s.hc}); ok {
+				out = append(out, f)
+			}
 			continue
 		}
 		if f, ok := s.runNuclei(ctx, base, t.AssetID, det); ok {
