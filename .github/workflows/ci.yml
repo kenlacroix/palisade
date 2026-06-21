@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  agent:
+    name: Agent (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+      - name: Test
+        run: go test ./...
+      - name: Build
+        run: go build ./...
+
+  control-plane:
+    name: Control plane (smoke)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: control-plane
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: control-plane/requirements.txt
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Smoke test (SQLite, in-process)
+        run: python -m app.smoke_test
+      - name: Migrations apply cleanly
+        env:
+          DATABASE_URL: sqlite:///./ci_alembic.db
+        run: alembic upgrade head
+      # `alembic check` is currently non-fatal: there is known model/migration
+      # drift in the repo that is tracked separately. Keep visibility without
+      # failing the build.
+      - name: Migration drift check (non-fatal)
+        continue-on-error: true
+        env:
+          DATABASE_URL: sqlite:///./ci_alembic.db
+        run: alembic check
+
+  detections:
+    name: Detections (validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: detections
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: detections/requirements.txt
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Validate
+        run: python validate.py
