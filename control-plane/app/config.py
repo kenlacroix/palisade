@@ -66,3 +66,23 @@ def cors_origins() -> list[str]:
         "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000",
     )
     return [o.strip() for o in raw.split(",") if o.strip()]
+
+
+# --- responsible scanning (SPEC §428) ---
+# Control-plane perimeter probes are paced so a scan never hammers a target.
+# PERIMETER_RATE_LIMIT_RPS caps outbound requests/sec per host (<=0 disables
+# pacing). PERIMETER_MIN_INTERVAL_S forces a minimum gap between probes to the
+# same host (0 = derive from RPS). PERIMETER_MAX_REQUESTS_PER_SCAN hard-bounds
+# total probes in a contiguous scan burst so a runaway scan can't fan out.
+PERIMETER_RATE_LIMIT_RPS = float(os.environ.get("PALISADE_PERIMETER_RATE_LIMIT_RPS", "5.0"))
+PERIMETER_MIN_INTERVAL_S = float(os.environ.get("PALISADE_PERIMETER_MIN_INTERVAL_S", "0"))
+PERIMETER_MAX_REQUESTS_PER_SCAN = int(os.environ.get("PALISADE_PERIMETER_MAX_REQUESTS_PER_SCAN", "500"))
+
+
+def perimeter_scope_allowlist() -> list[str]:
+    # Comma-separated hosts / domain suffixes / CIDRs the operator confirms are
+    # in scope. EMPTY (default) = allow-all with a warning: dev and the existing
+    # back-compat path must keep working, so we never silently scan nothing. Set
+    # this in production to confirm scope before any probe leaves the box.
+    raw = os.environ.get("PALISADE_PERIMETER_SCOPE_ALLOWLIST", "")
+    return [s.strip() for s in raw.split(",") if s.strip()]
