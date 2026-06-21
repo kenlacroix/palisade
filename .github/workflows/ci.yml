@@ -50,11 +50,7 @@ jobs:
         env:
           DATABASE_URL: sqlite:///./ci_alembic.db
         run: alembic upgrade head
-      # `alembic check` is currently non-fatal: there is known model/migration
-      # drift in the repo that is tracked separately. Keep visibility without
-      # failing the build.
-      - name: Migration drift check (non-fatal)
-        continue-on-error: true
+      - name: Migration drift check
         env:
           DATABASE_URL: sqlite:///./ci_alembic.db
         run: alembic check

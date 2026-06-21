@@ -252,7 +252,8 @@ class PostureSnapshot(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True)
     # UTC calendar day, "YYYY-MM-DD"; one snapshot per org per day (upserted).
-    day: Mapped[str] = mapped_column(String, index=True)
+    # No standalone index: reads filter by org_id or the (org_id, day) unique.
+    day: Mapped[str] = mapped_column(String)
     captured_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     score: Mapped[int] = mapped_column(Integer, default=100)
     critical: Mapped[int] = mapped_column(Integer, default=0)
@@ -264,9 +265,10 @@ class PostureSnapshot(Base):
 # --- evidence-at-rest: per-org data key, wrapped by the master KEK ---
 class OrgEncryptionKey(Base):
     __tablename__ = "org_encryption_key"
+    __table_args__ = (UniqueConstraint("org_id", name="uq_org_encryption_key_org"),)
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), unique=True, index=True)
+    org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), index=True)
     # 32-byte per-org data key, wrapped (AES-256-GCM nonce||ciphertext) with the
     # master KEK from config. The plaintext data key is never stored. Not under
     # RLS: lookups filter by org_id in code, and background workers (triage,
