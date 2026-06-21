@@ -187,7 +187,7 @@ function Shell({
           ) : view === "dashboard" ? (
             <Dashboard onOpenFinding={openFinding} />
           ) : view === "assets" ? (
-            <Assets />
+            <Assets role={session.role} />
           ) : view === "detections" ? (
             <Detections />
           ) : view === "alerts" ? (

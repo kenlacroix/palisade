@@ -13,6 +13,7 @@ import {
   updateRule,
   useApi,
   type AlertChannel,
+  type QuietHoursMode,
   type Role,
 } from "../api.ts";
 import type { Severity } from "../data.ts";
@@ -60,6 +61,12 @@ export default function Alerts({ role }: { role: Role }) {
   const [ruleBusy, setRuleBusy] = useState(false);
   const [ruleError, setRuleError] = useState<string | null>(null);
 
+  const [quietEnabled, setQuietEnabled] = useState(false);
+  const [quietStart, setQuietStart] = useState("22:00");
+  const [quietEnd, setQuietEnd] = useState("07:00");
+  const [quietTz, setQuietTz] = useState("UTC");
+  const [quietMode, setQuietMode] = useState<QuietHoursMode>("defer");
+
   const onTest = async (id: string) => {
     try {
       const res = await testChannel(id);
@@ -100,6 +107,10 @@ export default function Alerts({ role }: { role: Role }) {
         on_events: ruleEvents,
         channel_id: ruleChannel,
         enabled: true,
+        quiet_hours_start: quietEnabled ? quietStart : null,
+        quiet_hours_end: quietEnabled ? quietEnd : null,
+        quiet_hours_tz: quietTz,
+        quiet_hours_mode: quietMode,
       });
       setRuleName("");
       rules.refetch();
@@ -234,6 +245,7 @@ export default function Alerts({ role }: { role: Role }) {
                 <th className="px-4 py-3 font-medium">Min severity</th>
                 <th className="px-4 py-3 font-medium">Events</th>
                 <th className="px-4 py-3 font-medium">Channel</th>
+                <th className="px-4 py-3 font-medium">Quiet hours</th>
                 <th className="px-4 py-3 font-medium">Enabled</th>
                 {canEdit && <th className="px-4 py-3 font-medium" />}
               </tr>
@@ -247,6 +259,15 @@ export default function Alerts({ role }: { role: Role }) {
                   </td>
                   <td className="px-4 py-3 text-slate-400">{r.on_events.join(", ")}</td>
                   <td className="px-4 py-3 text-slate-400">{r.channel_name}</td>
+                  <td className="px-4 py-3 text-slate-400">
+                    {r.quiet_hours_start && r.quiet_hours_end ? (
+                      <span title={`${r.quiet_hours_mode} · ${r.quiet_hours_tz}`}>
+                        {r.quiet_hours_start}–{r.quiet_hours_end} ({r.quiet_hours_mode})
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <button
                       disabled={!canEdit}
@@ -330,6 +351,51 @@ export default function Alerts({ role }: { role: Role }) {
                     {ev}
                   </label>
                 ))}
+              </div>
+              <div className="space-y-2 border-t border-ink-700 pt-3">
+                <label className="flex items-center gap-1.5 text-sm text-slate-400">
+                  <input
+                    type="checkbox"
+                    checked={quietEnabled}
+                    onChange={(e) => setQuietEnabled(e.target.checked)}
+                  />
+                  Quiet hours
+                </label>
+                {quietEnabled && (
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                    <input
+                      type="time"
+                      value={quietStart}
+                      onChange={(e) => setQuietStart(e.target.value)}
+                      aria-label="quiet hours start"
+                      className="rounded-lg border border-ink-600 bg-ink-800 px-3 py-1.5 text-sm outline-none focus:border-accent"
+                    />
+                    <span className="text-slate-500">to</span>
+                    <input
+                      type="time"
+                      value={quietEnd}
+                      onChange={(e) => setQuietEnd(e.target.value)}
+                      aria-label="quiet hours end"
+                      className="rounded-lg border border-ink-600 bg-ink-800 px-3 py-1.5 text-sm outline-none focus:border-accent"
+                    />
+                    <input
+                      value={quietTz}
+                      onChange={(e) => setQuietTz(e.target.value)}
+                      placeholder="timezone (e.g. UTC)"
+                      aria-label="quiet hours timezone"
+                      className="rounded-lg border border-ink-600 bg-ink-800 px-3 py-1.5 text-sm outline-none placeholder:text-slate-600 focus:border-accent"
+                    />
+                    <select
+                      value={quietMode}
+                      onChange={(e) => setQuietMode(e.target.value as QuietHoursMode)}
+                      aria-label="quiet hours mode"
+                      className="rounded-lg border border-ink-600 bg-ink-800 px-3 py-1.5 text-sm outline-none focus:border-accent"
+                    >
+                      <option value="defer">defer</option>
+                      <option value="suppress">suppress</option>
+                    </select>
+                  </div>
+                )}
               </div>
               {ruleError && <div className="text-sm text-red-400">{ruleError}</div>}
               <button

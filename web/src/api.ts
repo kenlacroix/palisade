@@ -123,6 +123,9 @@ export const muteFinding = (id: string, reason: string, ttl_s = 3600) =>
 
 export const triggerRescan = () => post<{ agents_nudged: number }>("/v1/rescan");
 
+export const triggerExternalScan = () =>
+  post<{ enqueued: boolean; external_assets: number }>("/v1/scans/external");
+
 export interface DraftDetection {
   id: string;
   title: string;
@@ -193,6 +196,8 @@ export interface AlertChannel {
   created_at: string;
 }
 
+export type QuietHoursMode = "defer" | "suppress";
+
 export interface AlertRule {
   id: string;
   name: string;
@@ -201,6 +206,10 @@ export interface AlertRule {
   channel_id: string;
   channel_name: string;
   enabled: boolean;
+  quiet_hours_start: string | null;
+  quiet_hours_end: string | null;
+  quiet_hours_tz: string;
+  quiet_hours_mode: QuietHoursMode;
   created_at: string;
 }
 
@@ -247,6 +256,10 @@ export const createRule = (body: {
   on_events: ("new" | "regressed")[];
   channel_id: string;
   enabled: boolean;
+  quiet_hours_start?: string | null;
+  quiet_hours_end?: string | null;
+  quiet_hours_tz?: string;
+  quiet_hours_mode?: QuietHoursMode;
 }) => post<AlertRule>("/v1/alert-rules", body);
 
 export const updateRule = (
@@ -257,6 +270,10 @@ export const updateRule = (
     on_events: ("new" | "regressed")[];
     channel_id: string;
     enabled: boolean;
+    quiet_hours_start: string | null;
+    quiet_hours_end: string | null;
+    quiet_hours_tz: string;
+    quiet_hours_mode: QuietHoursMode;
   }>,
 ) => patch<AlertRule>(`/v1/alert-rules/${id}`, body);
 

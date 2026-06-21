@@ -1,13 +1,36 @@
 import { useState } from "react";
-import { fetchAssets, relativeTime, useApi } from "../api.ts";
+import { fetchAssets, relativeTime, triggerExternalScan, useApi, type Role } from "../api.ts";
 import { Card } from "../ui.tsx";
 
 type Filter = "all" | "internal" | "external";
 
-export default function Assets() {
+export default function Assets({ role }: { role: Role }) {
+  const canScan = role !== "viewer";
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
   const { data, error, loading } = useApi(fetchAssets, [], { pollMs: 10000 });
+
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+
+  const onExternalScan = async () => {
+    setScanBusy(true);
+    setScanStatus(null);
+    setScanError(null);
+    try {
+      const res = await triggerExternalScan();
+      setScanStatus(
+        res.enqueued
+          ? `Perimeter scan enqueued — ${res.external_assets} external asset${res.external_assets === 1 ? "" : "s"}.`
+          : "No external assets to scan.",
+      );
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setScanBusy(false);
+    }
+  };
 
   const rows = (data?.assets ?? []).filter(
     (a) =>
@@ -20,6 +43,16 @@ export default function Assets() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Assets</h1>
         <div className="flex items-center gap-2">
+          {canScan && (
+            <button
+              onClick={onExternalScan}
+              disabled={scanBusy}
+              title="Run a control-plane perimeter scan (attacker's-eye view) against external assets"
+              className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+            >
+              {scanBusy ? "Scanning…" : "External scan"}
+            </button>
+          )}
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -37,6 +70,12 @@ export default function Assets() {
           </select>
         </div>
       </div>
+
+      {scanError ? (
+        <div className="text-sm text-red-400">External scan failed: {scanError}</div>
+      ) : scanStatus ? (
+        <div className="text-sm text-emerald-400">{scanStatus}</div>
+      ) : null}
 
       <Card>
         <table className="w-full text-sm">
