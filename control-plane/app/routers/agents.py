@@ -141,6 +141,7 @@ def heartbeat(
                 agent_id=agent.id,
                 status="issued",
                 assets_count=len(targets),
+                targets=targets,
             )
             db.add(scan)
             agent.last_scan_issued_at = _now()

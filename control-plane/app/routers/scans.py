@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .. import alerting, config, encryption, queue
 from ..auth import require_agent
 from ..db import get_db
-from ..models import Agent, Detection, Finding
+from ..models import Agent, Detection, Finding, Scan
 from ..schemas import FindingsRequest
 from ..tasks import triage_findings
 
@@ -73,23 +73,45 @@ def ingest_findings(
                 existing.status = "regressed"
                 alert_events.append((existing.id, "regressed"))
 
-    # open -> resolved when a later scan of the same asset+detection does NOT
-    # report it. Best effort: scope to assets touched in this scan's targets.
-    # TODO(prod): track scan target manifest to resolve precisely; here we
-    #             resolve open findings for (asset,detection) pairs that share
-    #             an asset reported in this batch but were not re-reported.
-    touched_assets = {asset_id for asset_id, _ in reported_keys}
-    if touched_assets:
+    # open -> resolved when a scan that covered the (asset, detection) pair does
+    # NOT report it. The scan's stored target manifest makes this precise: only
+    # pairs we actually scanned can be resolved; a pair absent from the manifest
+    # was not scanned this cycle and is left untouched (not "absent").
+    scan = db.get(Scan, scan_id)
+    manifest: set[tuple[str, str]] = set()
+    if scan is not None:
+        for t in scan.targets or []:
+            aid = t.get("asset_id")
+            for did in t.get("detection_ids") or []:
+                manifest.add((aid, did))
+
+    if manifest:
+        scanned_assets = {aid for aid, _ in manifest}
         open_findings = db.execute(
             select(Finding).where(
-                Finding.asset_id.in_(touched_assets),
+                Finding.asset_id.in_(scanned_assets),
                 Finding.status.in_(["open", "regressed"]),
             )
         ).scalars().all()
         for f in open_findings:
-            if (f.asset_id, f.detection_id) not in reported_keys:
+            key = (f.asset_id, f.detection_id)
+            if key in manifest and key not in reported_keys:
                 f.status = "resolved"
                 f.last_seen = _now()
+    else:
+        # Legacy/manifest-less scan: best-effort by asset touched in this batch.
+        touched_assets = {asset_id for asset_id, _ in reported_keys}
+        if touched_assets:
+            open_findings = db.execute(
+                select(Finding).where(
+                    Finding.asset_id.in_(touched_assets),
+                    Finding.status.in_(["open", "regressed"]),
+                )
+            ).scalars().all()
+            for f in open_findings:
+                if (f.asset_id, f.detection_id) not in reported_keys:
+                    f.status = "resolved"
+                    f.last_seen = _now()
 
     db.commit()
 

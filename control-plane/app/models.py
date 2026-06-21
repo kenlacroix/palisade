@@ -108,6 +108,11 @@ class Scan(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     assets_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Scan target manifest: [{"asset_id", "detection_ids":[...]}]. Records exactly
+    # what was scanned so findings ingest can resolve precisely — an unreported
+    # (asset, detection) that WAS in the manifest is resolved; one that was not is
+    # left untouched (not scanned this cycle, not "absent").
+    targets: Mapped[list] = mapped_column(JSON, default=list)
 
 
 class Finding(Base):
