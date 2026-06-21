@@ -1,0 +1,31 @@
+id: grafana-plugin-path-traversal
+title: Grafana plugin path traversal (version banner)
+cve: CVE-2021-43798
+cvss: 7.5
+severity: high
+category: observability
+engine: nuclei
+match:
+  service: grafana
+  versions: ">=8.0.0 <8.0.7 || >=8.1.0 <8.1.8 || >=8.2.0 <8.2.7 || >=8.3.0 <8.3.1"
+# Non-destructive: identify the running Grafana version exposed in the
+# unauthenticated frontend settings API rather than performing the ../ traversal
+# against /public/plugins/. The patched build is gated server-side by versions.
+http:
+  - method: GET
+    path: /api/frontend/settings
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: body
+        words: ["buildInfo", "\"version\""]
+remediation: |
+  Upgrade Grafana to >=8.3.1 (or the patched release on your branch: 8.2.7,
+  8.1.8, 8.0.7). If you cannot upgrade, place a reverse proxy in front of Grafana
+  that normalizes the request path, and do not expose Grafana to the internet.
+references:
+  - https://github.com/grafana/grafana/security/advisories/GHSA-8pjx-jj86-j47p
+  - https://nvd.nist.gov/vuln/detail/CVE-2021-43798
+signature: stub

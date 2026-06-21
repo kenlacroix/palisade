@@ -1,0 +1,32 @@
+id: apache-httpd-2449-path-traversal
+title: Apache HTTP Server 2.4.49 path traversal (version banner)
+cve: CVE-2021-41773
+cvss: 7.5
+severity: high
+category: web
+engine: nuclei
+match:
+  service: apache-httpd
+  versions: "2.4.49"
+# Non-destructive: identify the vulnerable build by its Server banner instead of
+# sending an actual ../ traversal payload. CVE-2021-41773 only affects 2.4.49.
+http:
+  - method: GET
+    path: /
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: header
+        words: ["Apache/2.4.49"]
+      - type: regex
+        part: header
+        regex: ["Server:\\s*Apache/2\\.4\\.49"]
+remediation: |
+  Upgrade Apache HTTP Server to >=2.4.51 (2.4.50 was an incomplete fix, see
+  CVE-2021-42013). If an upgrade is not immediately possible, ensure all
+  filesystem locations are protected by "Require all denied" and disable mod_cgi
+  for aliased paths. Do not expose the affected build to the internet.
+references:
+  - https://httpd.apache.org/security/vulnerabilities_24.html
+  - https://nvd.nist.gov/vuln/detail/CVE-2021-41773
+signature: stub
