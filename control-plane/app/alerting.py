@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from . import encryption, notify
 from .db import SessionLocal
 from .models import Alert, AlertChannel, AlertRule, Asset, Detection, Finding
+from .tenancy import _set_rls_org
 
 SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
 # Keys whose values are secrets; the router redacts these on read.
@@ -134,12 +135,13 @@ def release_due_deferred(db: Session, org_id: str) -> list[str]:
     return ids
 
 
-def deliver_pending(alert_ids: list[str]) -> None:
+def deliver_pending(org_id: str, alert_ids: list[str]) -> None:
     """Background-safe delivery: own session, one dispatch per alert."""
     if not alert_ids:
         return
     db = SessionLocal()
     try:
+        _set_rls_org(db, org_id)
         for alert_id in alert_ids:
             alert = db.get(Alert, alert_id)
             if alert is None:

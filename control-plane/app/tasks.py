@@ -21,12 +21,15 @@ from .version_match import service_matches
 log = logging.getLogger(__name__)
 
 
-def triage_findings(finding_ids: list[str]) -> None:
+def triage_findings(org_id: str, finding_ids: list[str]) -> None:
     """AI-triage newly opened findings off the request path. No-op without a key."""
     db = SessionLocal()
     try:
         for fid in finding_ids:
             try:
+                # SET LOCAL is per-transaction; the per-finding commit below clears
+                # the GUC, so re-apply it each iteration to keep RLS scoped.
+                _set_rls_org(db, org_id)
                 f = db.get(Finding, fid)
                 if f is None:
                     continue
@@ -120,6 +123,6 @@ def scan_external_assets(org_id: str) -> None:
 
     # triage + delivery open their own sessions; run inline (already background).
     if config.ANTHROPIC_API_KEY and new_ids:
-        triage_findings(new_ids)
+        triage_findings(org_id, new_ids)
     if alert_ids:
-        alerting.deliver_pending(alert_ids)
+        alerting.deliver_pending(org_id, alert_ids)

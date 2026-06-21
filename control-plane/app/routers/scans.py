@@ -58,7 +58,7 @@ def ingest_findings(
 
     # Offload AI triage so it never blocks the request. No-op without a key.
     if config.ANTHROPIC_API_KEY and new_finding_ids:
-        queue.enqueue(background, "triage_findings", triage_findings, new_finding_ids)
+        queue.enqueue(background, "triage_findings", triage_findings, agent.org_id, new_finding_ids)
 
     # Evaluate alert rules and enqueue, then deliver in the background.
     alert_ids: list[str] = []
@@ -71,6 +71,6 @@ def ingest_findings(
     alert_ids.extend(alerting.release_due_deferred(db, agent.org_id))
     if alert_ids:
         db.commit()
-        queue.enqueue(background, "deliver_alerts", alerting.deliver_pending, alert_ids)
+        queue.enqueue(background, "deliver_alerts", alerting.deliver_pending, agent.org_id, alert_ids)
 
     return Response(status_code=202)

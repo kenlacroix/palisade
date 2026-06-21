@@ -11,12 +11,12 @@ from arq.connections import RedisSettings
 from . import alerting, config, tasks
 
 
-async def triage_findings(ctx, finding_ids: list[str]) -> None:
-    await asyncio.to_thread(tasks.triage_findings, finding_ids)
+async def triage_findings(ctx, org_id: str, finding_ids: list[str]) -> None:
+    await asyncio.to_thread(tasks.triage_findings, org_id, finding_ids)
 
 
-async def deliver_alerts(ctx, alert_ids: list[str]) -> None:
-    await asyncio.to_thread(alerting.deliver_pending, alert_ids)
+async def deliver_alerts(ctx, org_id: str, alert_ids: list[str]) -> None:
+    await asyncio.to_thread(alerting.deliver_pending, org_id, alert_ids)
 
 
 async def scan_external_assets(ctx, org_id: str) -> None:
