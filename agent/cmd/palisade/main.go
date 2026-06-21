@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -141,8 +142,14 @@ func cmdRun(args []string) error {
 	}
 
 	// heartbeat_interval_s default per contract; refreshed from enroll if we
-	// later persist it. Start at 30s.
+	// later persist it. Start at 30s. PALISADE_HEARTBEAT_INTERVAL_S overrides it
+	// (operators tuning cadence; integration tests collapsing the loop).
 	interval := 30 * time.Second
+	if v := os.Getenv("PALISADE_HEARTBEAT_INTERVAL_S"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			interval = time.Duration(n) * time.Second
+		}
+	}
 	log.Printf("running: server=%s agent=%s interval=%s", cfg.Server, cfg.AgentID, interval)
 
 	ticker := time.NewTicker(interval)

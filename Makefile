@@ -5,7 +5,7 @@ ALEMBIC := cd $(CP) && .venv/bin/alembic
 
 .DEFAULT_GOAL := help
 
-.PHONY: help venv up down logs migrate revision check smoke test agent-build web
+.PHONY: help venv up down logs migrate revision check smoke integration test agent-build web
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -35,9 +35,13 @@ check: ## Fail if models drift from migrations (run before committing schema cha
 smoke: ## Control-plane end-to-end smoke test
 	cd $(CP) && .venv/bin/python -m app.smoke_test
 
-test: ## Agent Go tests + control-plane smoke + detection validation
+integration: ## Live test: real agent binary <-> real control plane over HTTP
+	cd $(CP) && .venv/bin/python -m app.live_integration_test
+
+test: ## Agent Go tests + control-plane smoke + live integration + detection validation
 	cd agent && go test ./...
 	$(MAKE) smoke
+	$(MAKE) integration
 	cd detections && .venv/bin/python validate.py
 
 agent-build: ## Build the Go agent binary (agent/palisade)
