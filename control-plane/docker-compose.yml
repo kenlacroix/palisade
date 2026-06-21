@@ -26,6 +26,20 @@ services:
       timeout: 3s
       retries: 10
 
+  # One-shot schema migration. Runs to completion before any replica boots so
+  # the app processes never race to migrate (PALISADE_AUTO_MIGRATE=0 below).
+  migrate:
+    build:
+      context: ..
+      dockerfile: control-plane/Dockerfile
+    command: ["python", "-m", "app.migrate"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://palisade:palisade@postgres:5432/palisade}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   api:
     build:
       context: ..
@@ -33,6 +47,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://palisade:palisade@postgres:5432/palisade}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      PALISADE_AUTO_MIGRATE: "0"
       PALISADE_ENROLL_TOKENS: ${PALISADE_ENROLL_TOKENS:-PLS-DEMO}
       PALISADE_CORS_ORIGINS: ${PALISADE_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     depends_on:
@@ -40,6 +55,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "${API_PORT:-8000}:8000"
     # Live-edit detections locally without a rebuild; image carries them for prod.
@@ -62,6 +79,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ../detections:/app/detections:ro
 
