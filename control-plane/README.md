@@ -48,6 +48,10 @@ All knobs live in `app/config.py` and are read from env. See `.env.example`.
 | `PALISADE_ENROLL_TOKENS` | `PLS-DEMO` | Comma-separated accepted enroll tokens. Rotate for prod. |
 | `PALISADE_CORS_ORIGINS` | localhost:5173/3000 | Set to your UI domain on the VPS. |
 | `PALISADE_DETECTIONS_DIR` | repo `detections/` | Container sets `/app/detections`. |
+| `PALISADE_SIGNING_KEY` | unset (`"stub"`) | Ed25519 seed (base64) for catalog bundle signing. |
+| `ANTHROPIC_API_KEY` | unset | Enables AI drafting (`/v1/detections/draft`) + finding triage. |
+| `PALISADE_DRAFT_MODEL` | `claude-opus-4-8` | Model for CVE-URL drafting. |
+| `PALISADE_TRIAGE_MODEL` | `claude-haiku-4-5-20251001` | Model for finding triage. |
 
 Detections are seeded from every `*.yaml` in `PALISADE_DETECTIONS_DIR` if it
 exists, otherwise from two inline fallbacks (`litellm-proxy-preauth-sqli`,
@@ -56,11 +60,13 @@ exists, otherwise from two inline fallbacks (`litellm-proxy-preauth-sqli`,
 ## Smoke test
 
 ```bash
-python -m app.smoke_test     # or: pytest app/smoke_test.py
+python -m app.smoke_test     # full loop, unsigned path (or: pytest app/smoke_test.py)
+python -m app.api_test       # signed bundle, draft/accept, version match, cvss, mute, triage
 ```
 
-Runs enroll -> heartbeat(discover) -> assets -> heartbeat(scan) -> findings ->
-posture against an isolated temp DB.
+Smoke runs enroll -> heartbeat(discover) -> assets -> heartbeat(scan) ->
+findings -> posture against an isolated temp DB. Both run as plain scripts
+(no pytest required).
 
 ## Curl walkthrough
 
@@ -112,6 +118,20 @@ curl -s "$BASE/v1/posture/summary"
 - **Single-use enroll tokens:** currently repeated enrollment is accepted.
 - **Row-Level Security:** prod uses Postgres RLS keyed on `org_id`; the scaffold
   uses a single hardcoded demo org and app-layer scoping only.
-- **Version range matching:** scan targeting matches on `match.service` only and
-  ignores `match.versions`.
-- **Bundle signing:** `signature` is stubbed (`"stub"`); prod signs with minisign.
+- **Triage queue:** finding triage runs inline/best-effort on ingest; prod
+  should offload it to a queue/worker.
+
+## Implemented
+
+- **Version range matching:** scan targeting matches on `match.service` **and**
+  `match.versions` (comma/space-separated constraints; unknown asset versions
+  fail open). See `app/version_match.py`.
+- **Bundle signing:** when `PALISADE_SIGNING_KEY` is set the catalog bundle is
+  Ed25519-signed over a canonical manifest; the agent verifies it against a
+  pinned pubkey before running detections. Unset → `signature` stays `"stub"`
+  (dev mode). See `app/signing.py`.
+- **Draft → accept loop:** `POST /v1/detections/draft` drafts from a CVE URL
+  (needs `ANTHROPIC_API_KEY`); `POST /v1/detections` persists a reviewed draft
+  and bumps the catalog version.
+- **CVSS + AI triage:** detections carry a `cvss` score; new findings are
+  AI-triaged on ingest when `ANTHROPIC_API_KEY` is set (`app/triage.py`).

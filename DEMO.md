@@ -136,12 +136,55 @@ rm -rf /tmp/palisade-agent
 rm -f /home/ken/Documents/GitHub/palisade/control-plane/palisade.db
 ```
 
+## 7. Optional — signed bundle over an untrusted channel
+
+Restart the control plane (Terminal A) with the demo signing key so the catalog
+bundle is Ed25519-signed instead of `"stub"`:
+
+```bash
+cd /home/ken/Documents/GitHub/palisade/control-plane
+PALISADE_ENROLL_TOKENS=PLS-DEMO \
+PALISADE_SIGNING_KEY=70kJtI1NajTd1yQXFHVRuBVQfc6P2CAtRroaLCmYYbY= \
+  ./.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+The agent (Terminal C) pins the matching public key by default, so on its next
+scan it logs `bundle signature verified (N detections)` before running anything.
+The bundle now carries a real base64 signature:
+
+```bash
+curl -s "http://127.0.0.1:8000/v1/catalog/bundle?since=0" \
+  -H "Authorization: Bearer $SECRET" | python3 -c "import sys,json;print(json.load(sys.stdin)['signature'][:24],'...')"
+```
+
+Tamper test: point the agent at a wrong pubkey and it refuses to scan —
+`PALISADE_CATALOG_PUBKEY=AAAA...` on the agent → `bundle signature verification
+FAILED, refusing to run detections`.
+
+## 8. Optional — draft a detection from a CVE URL and ship it
+
+With `ANTHROPIC_API_KEY` set on the control plane, the **Detections** screen's
+**+ New from CVE URL** drafts a detection; **Accept & ship** persists it and
+bumps the catalog version so agents pull it next bundle. Headless equivalent:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/v1/detections -H 'content-type: application/json' -d '{
+  "id":"acme-rce","title":"ACME RCE","cve":"CVE-2026-9999","severity":"high",
+  "category":"web","engine":"nuclei","match":{"service":"acme","versions":"<2.0.0"},
+  "http":[{"method":"GET","path":"/x","matchers":[{"type":"status","status":[200]}]}],
+  "remediation":"upgrade to >=2.0.0","references":["https://example.com"],"cvss":7.5
+}'   # -> {"id":"acme-rce","version":<bumped>}
+```
+
 ## Notes / known scaffold limits
 
 - The agent scans **on-host only**; the target must listen on this machine.
   Port 4000 is required for the demo because discover maps 4000 -> `litellm`.
 - The Next.js detection (`nextjs-middleware-bypass`) is `engine: module` and the
   agent logs+skips module detections, so it cannot be demoed end-to-end yet.
-- Auth is a bearer `agent_secret` (mTLS is a documented TODO). Catalog
-  `signature` is `"stub"` (minisign signing is a TODO); the agent only checks it
-  is non-empty.
+- Auth is a bearer `agent_secret` (mTLS is a documented TODO).
+- Catalog bundles are Ed25519-signed when `PALISADE_SIGNING_KEY` is set
+  (step 7); unset → `signature` stays `"stub"` and the agent proceeds in dev
+  mode after a warning.
+- Scan targeting now matches `match.service` **and** `match.versions`, so the
+  litellm asset is scanned only when its version is in range (`<1.40.2`).
