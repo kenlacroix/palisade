@@ -2,8 +2,24 @@ package catalog
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"encoding/base64"
 	"testing"
 )
+
+// demoSeedB64 is the base64 raw 32-byte Ed25519 seed whose public key is
+// DemoPublicKeyB64 (see control-plane signing.py DEMO_SEED_B64). Public dev key.
+const demoSeedB64 = "70kJtI1NajTd1yQXFHVRuBVQfc6P2CAtRroaLCmYYbY="
+
+func signWithDemoSeed(t *testing.T, version int, dets []Detection) string {
+	t.Helper()
+	seed, err := base64.StdEncoding.DecodeString(demoSeedB64)
+	if err != nil {
+		t.Fatalf("decode demo seed: %v", err)
+	}
+	sig := ed25519.Sign(ed25519.NewKeyFromSeed(seed), BuildManifest(version, dets))
+	return base64.StdEncoding.EncodeToString(sig)
+}
 
 func sampleDetections() []Detection {
 	return []Detection{
@@ -100,6 +116,27 @@ func TestTamperChangesManifest(t *testing.T) {
 				t.Fatalf("tampering with %s did not change manifest", tc.name)
 			}
 		})
+	}
+}
+
+func TestVerifyBundleSignedThenTamperedRejected(t *testing.T) {
+	dets := sampleDetections()
+	sig := signWithDemoSeed(t, 7, dets)
+
+	if ok, err := VerifyBundle(7, dets, sig, DemoPublicKeyB64); err != nil || !ok {
+		t.Fatalf("expected valid signature to verify, got ok=%v err=%v", ok, err)
+	}
+
+	// Same signature, a detection mutated after signing: must be rejected.
+	tampered := sampleDetections()
+	tampered[0].Remediation += " TAMPERED"
+	if ok, _ := VerifyBundle(7, tampered, sig, DemoPublicKeyB64); ok {
+		t.Fatal("expected tampered bundle to be rejected")
+	}
+
+	// The signature covers the version too.
+	if ok, _ := VerifyBundle(8, dets, sig, DemoPublicKeyB64); ok {
+		t.Fatal("expected version mismatch to be rejected")
 	}
 }
 

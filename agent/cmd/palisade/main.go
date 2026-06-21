@@ -243,11 +243,12 @@ func (a *agent) runScan(ctx context.Context, job catalog.Job) {
 	// before running ANY detection. Supply-chain integrity is load-bearing for
 	// a security product.
 	switch bundle.Signature {
-	case "":
-		log.Printf("scan %s: refusing to run, bundle signature is empty", job.JobID)
-		return
-	case "stub":
-		log.Printf("scan %s: bundle is unsigned (dev mode), proceeding", job.JobID)
+	case "", "stub":
+		if os.Getenv("PALISADE_ALLOW_UNSIGNED") == "" {
+			log.Printf("scan %s: bundle is unsigned and PALISADE_ALLOW_UNSIGNED is not set, refusing to run detections", job.JobID)
+			return
+		}
+		log.Printf("scan %s: bundle is unsigned, proceeding because PALISADE_ALLOW_UNSIGNED is set (dev mode)", job.JobID)
 	default:
 		pubkey := os.Getenv("PALISADE_CATALOG_PUBKEY")
 		if pubkey == "" {

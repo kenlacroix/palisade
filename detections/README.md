@@ -29,7 +29,7 @@ Every detection is an object with these fields:
 | `spec_ref`    | string | module only | Reference to a compiled Go module (e.g. `modules/nextjs_middleware_bypass`). Required when `engine: module`; forbidden otherwise. |
 | `remediation` | string | yes | Fix guidance. |
 | `references`  | array  | yes | One or more URIs (advisory, NVD, etc.). |
-| `signature`   | string | yes | Minisign signature over the detection. Currently stubbed as `"stub"`. |
+| `signature`   | string | yes | Reserved per-detection signature field (not yet enforced — leave `"stub"`). The enforced trust boundary is the **bundle** signature, see [Signing](#signing). |
 
 ### `http[]` (nuclei engine)
 
@@ -85,7 +85,8 @@ A reported finding's `fingerprint` is
    - `nuclei` → add an `http` block with matchers.
    - `module` → add `spec_ref` pointing at the Go module.
 3. Add `remediation` and at least one `references` URI.
-4. Leave `signature: stub` (signing is wired later).
+4. Leave `signature: stub` (the per-detection field is reserved; the **bundle**
+   is what gets signed and verified — see [Signing](#signing)).
 5. Validate:
    ```sh
    python -m venv .venv && . .venv/bin/activate
@@ -99,7 +100,45 @@ A reported finding's `fingerprint` is
 - Agent calls use **mTLS** over https (client cert issued at enroll), with the
   bearer `agent_secret` as the plaintext-http fallback.
 
+## Signing
+
+The control plane serves detections as a **bundle** (`GET /v1/catalog/bundle`)
+and signs it with Ed25519 over a canonical manifest of every detection. The
+agent verifies that signature against a pinned public key **before running any
+detection** and refuses to scan if it fails — the signed bundle, not the control
+plane, is the trust boundary.
+
+- Control plane signs with the seed in `PALISADE_SIGNING_KEY` (base64 raw 32-byte
+  Ed25519 seed). **Unset → it signs with the public demo key and logs a warning;
+  never run production unsigned.**
+- Agents pin `PALISADE_CATALOG_PUBKEY` (base64 raw 32-byte public key), defaulting
+  to the demo key. It must match the control plane's signing key.
+- Agents fail **closed**: an unsigned/`"stub"` bundle is refused unless
+  `PALISADE_ALLOW_UNSIGNED` is set (dev-only escape hatch).
+
+**Generate a production keypair:**
+
+```sh
+python - <<'PY'
+import base64, os
+from app import _ed25519
+seed = os.urandom(32)
+print("PALISADE_SIGNING_KEY =", base64.b64encode(seed).decode())
+print("PALISADE_CATALOG_PUBKEY =", base64.b64encode(_ed25519.publickey(seed)).decode())
+PY
+```
+
+Set `PALISADE_SIGNING_KEY` on the control plane and the matching
+`PALISADE_CATALOG_PUBKEY` on every agent.
+
+**Rotation:** generate a new keypair, roll `PALISADE_CATALOG_PUBKEY` out to agents
+first (they accept the new key), then switch `PALISADE_SIGNING_KEY` on the control
+plane. Keep the old key live until all agents have the new pubkey; agents fail
+closed on mismatch, so a premature signer switch stops scans rather than running
+unverified.
+
 ## TODO
 
-- `signature` is stubbed (`"stub"`). Implement minisign signing + agent-side
-  verification of the bundle before execution.
+- Per-detection `signature` field is reserved (`"stub"`); bundle-level signing is
+  enforced. Per-detection signatures would let detections be authored/shared
+  across trust domains independently of the serving control plane.

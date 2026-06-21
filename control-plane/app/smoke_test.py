@@ -111,7 +111,12 @@ def _run(client, finding_fingerprint):
     r = client.get("/v1/catalog/bundle?since=0", headers=auth)
     assert r.status_code == 200, r.text
     bundle = r.json()
-    assert bundle["signature"] == "stub"
+    from . import signing
+
+    assert bundle["signature"] not in ("", "stub"), bundle["signature"]
+    assert signing.verify_bundle(
+        bundle["version"], bundle["detections"], bundle["signature"], signing.DEMO_PUB_B64
+    ), "bundle signature must verify against the demo pubkey"
     det_ids = {d["id"] for d in bundle["detections"]}
     assert "litellm-proxy-preauth-sqli" in det_ids
 

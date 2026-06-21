@@ -2,14 +2,24 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 
 from . import _ed25519
 from .config import SIGNING_KEY
+
+log = logging.getLogger("palisade.signing")
 
 # Demo keypair (base64-std, raw 32-byte seed / 32-byte public). The agent pins
 # DEMO_PUB_B64; signing with DEMO_SEED_B64 produces bundles it accepts.
 DEMO_SEED_B64 = "70kJtI1NajTd1yQXFHVRuBVQfc6P2CAtRroaLCmYYbY="
 DEMO_PUB_B64 = "DRLpngzapOzExqzZsykc6h8LTpuGjw3ahrGJvnMwFhY="
+
+if not SIGNING_KEY:
+    log.warning(
+        "PALISADE_SIGNING_KEY not set; signing the detection catalog with the "
+        "PUBLIC demo key. Do NOT use this in production — set PALISADE_SIGNING_KEY "
+        "and a matching agent PALISADE_CATALOG_PUBKEY."
+    )
 
 # Field/record/group/space separators. Must match the Go agent verifier byte
 # for byte — do not "clean up" the canonical encoding.
@@ -118,9 +128,7 @@ def build_manifest(version: int, detections: list[dict]) -> bytes:
 
 
 def sign_bundle(version: int, detections: list[dict]) -> str:
-    if not SIGNING_KEY:
-        return "stub"
-    seed = base64.b64decode(SIGNING_KEY)
+    seed = base64.b64decode(SIGNING_KEY or DEMO_SEED_B64)
     sig = _ed25519.sign(build_manifest(version, detections), seed)
     return base64.b64encode(sig).decode()
 
