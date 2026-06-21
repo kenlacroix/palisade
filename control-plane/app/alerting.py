@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import notify
+from . import encryption, notify
 from .db import SessionLocal
 from .models import Alert, AlertChannel, AlertRule, Asset, Detection, Finding
 
@@ -71,7 +71,7 @@ def deliver_pending(alert_ids: list[str]) -> None:
             det = db.get(Detection, finding.detection_id) if finding else None
 
             title = det.title if det else (finding.detection_id if finding else alert.finding_id)
-            evidence = finding.evidence if finding and isinstance(finding.evidence, dict) else {}
+            evidence = encryption.open_evidence(db, finding) if finding else {}
             subject, text = notify.render_alert_text(
                 title=title,
                 severity=alert.severity,

@@ -10,6 +10,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     UniqueConstraint,
 )
@@ -121,6 +122,10 @@ class Finding(Base):
     status: Mapped[str] = mapped_column(String, default="open")  # open|resolved|muted|regressed
     fingerprint: Mapped[str] = mapped_column(String, unique=True, index=True)
     evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Evidence sealed at rest (AES-256-GCM, nonce||ciphertext) under the org's
+    # data key. Populated only when a KEK is configured; then `evidence` is empty
+    # and reads go through encryption.open_evidence. See app/encryption.py.
+    evidence_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     mute_reason: Mapped[str | None] = mapped_column(String, nullable=True)
     mute_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     triage_priority: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -239,6 +244,20 @@ class PostureSnapshot(Base):
     high: Mapped[int] = mapped_column(Integer, default=0)
     medium: Mapped[int] = mapped_column(Integer, default=0)
     assets_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+# --- evidence-at-rest: per-org data key, wrapped by the master KEK ---
+class OrgEncryptionKey(Base):
+    __tablename__ = "org_encryption_key"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), unique=True, index=True)
+    # 32-byte per-org data key, wrapped (AES-256-GCM nonce||ciphertext) with the
+    # master KEK from config. The plaintext data key is never stored. Not under
+    # RLS: lookups filter by org_id in code, and background workers (triage,
+    # delivery) read it without the per-request org GUC.
+    wrapped_dek: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
 # --- mTLS: internal certificate authority (single platform-wide row) ---

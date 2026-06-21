@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Path, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import alerting, config, queue
+from .. import alerting, config, encryption, queue
 from ..auth import require_agent
 from ..db import get_db
 from ..models import Agent, Detection, Finding
@@ -42,6 +42,9 @@ def ingest_findings(
             select(Finding).where(Finding.fingerprint == fr.fingerprint)
         ).scalar_one_or_none()
 
+        evidence_json, evidence_enc = encryption.seal(
+            db, agent.org_id, fr.evidence.model_dump()
+        )
         if existing is None:
             # Unseen fingerprint -> open. AI triage is offloaded post-commit.
             finding = Finding(
@@ -52,7 +55,8 @@ def ingest_findings(
                 severity=severity,
                 status="open",
                 fingerprint=fr.fingerprint,
-                evidence=fr.evidence.model_dump(),
+                evidence=evidence_json,
+                evidence_enc=evidence_enc,
             )
             db.add(finding)
             db.flush()  # assign id for triage + alerting
@@ -62,7 +66,8 @@ def ingest_findings(
             # Seen and still reported -> bump last_seen.
             existing.last_seen = _now()
             existing.scan_id = scan_id
-            existing.evidence = fr.evidence.model_dump()
+            existing.evidence = evidence_json
+            existing.evidence_enc = evidence_enc
             if existing.status == "resolved":
                 # resolved -> regressed on reappearance.
                 existing.status = "regressed"

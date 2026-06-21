@@ -3,6 +3,7 @@ never raises, so it runs identically under an Arq worker (REDIS_URL set) or an
 in-process FastAPI BackgroundTask (the fallback). See queue.enqueue."""
 from __future__ import annotations
 
+from . import encryption
 from .db import SessionLocal
 from .models import Asset, Detection, Finding
 from .triage import triage_finding
@@ -19,7 +20,7 @@ def triage_findings(finding_ids: list[str]) -> None:
                     continue
                 det = db.get(Detection, f.detection_id)
                 asset = db.get(Asset, f.asset_id)
-                evidence = f.evidence if isinstance(f.evidence, dict) else {}
+                evidence = encryption.open_evidence(db, f)
                 result = triage_finding(
                     title=det.title if det else f.detection_id,
                     severity=f.severity,

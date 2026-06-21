@@ -27,6 +27,11 @@ TRIAGE_MODEL = os.environ.get("PALISADE_TRIAGE_MODEL", "claude-haiku-4-5-2025100
 # Ed25519 secret seed (base64) used to sign the catalog bundle. Unset -> "stub".
 SIGNING_KEY = os.environ.get("PALISADE_SIGNING_KEY", "")
 
+# Master key-encryption key (base64, 32 bytes) for evidence-at-rest. Wraps a
+# per-org data key; finding evidence is sealed with AES-256-GCM under that key.
+# Unset -> encryption disabled and evidence is stored as plaintext JSON (dev).
+EVIDENCE_KEK = os.environ.get("PALISADE_EVIDENCE_KEK", "")
+
 
 def enroll_tokens() -> set[str]:
     raw = os.environ.get("PALISADE_ENROLL_TOKENS", "PLS-DEMO")

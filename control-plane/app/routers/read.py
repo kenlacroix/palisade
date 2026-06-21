@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from .. import snapshots
+from .. import encryption, snapshots
 from ..db import get_db
 from ..models import Agent, Asset, Detection, Finding, Org
 from ..tenancy import current_org, require_role
@@ -56,7 +56,7 @@ def _finding_row(db: Session, f: Finding) -> FindingRow:
         severity=f.severity,
         status=f.status,
         fingerprint=f.fingerprint,
-        evidence=f.evidence or {},
+        evidence=encryption.open_evidence(db, f),
         remediation=spec.get("remediation") or None,
         references=list(spec.get("references") or []),
         first_seen=_iso(f.first_seen),
