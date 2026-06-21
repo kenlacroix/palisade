@@ -180,10 +180,13 @@ Key vars:
 Implemented: enroll/heartbeat/scan loop, signed catalog bundles, version-aware
 matching, AI drafting + accept loop, CVSS, background AI triage, posture scoring
 with real 30-day trends, multi-tenancy (users/sessions/orgs + RBAC, single-use
-enroll tokens, Postgres row-level security per `org_id`), and alerting
-(channels/rules/history). Production TODOs (see `SPEC.md` and inline `TODO(prod)`
-markers): mTLS client certs in place of agent bearer secrets, the `module`
-detection engine, a security-definer path for the cross-tenant catalog aggregate
-under RLS, and a real queue/worker in place of FastAPI background tasks.
+enroll tokens, Postgres row-level security per `org_id`), alerting
+(channels/rules/history), agent **mTLS** (enroll issues a client cert from an
+internal CA; verified at a TLS-terminating proxy, with the bearer `agent_secret`
+as the plaintext-demo fallback), and a `SECURITY DEFINER` path so the
+cross-tenant catalog aggregate (`tenants_hit` / `tenants_total`) is correct under
+RLS on Postgres. Production TODOs (see `SPEC.md` and inline `TODO(prod)`
+markers): the `module` detection engine and a real queue/worker in place of
+FastAPI background tasks.
 </content>
 </invoke>

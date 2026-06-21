@@ -25,6 +25,11 @@ class EnrollResponse(BaseModel):
     agent_id: str
     agent_secret: str
     heartbeat_interval_s: int = 30
+    # mTLS material issued at enroll. The agent presents client_cert_pem on every
+    # request once enrolled; bearer (agent_secret) remains the dev/plaintext path.
+    client_cert_pem: str | None = None
+    client_key_pem: str | None = None
+    ca_cert_pem: str | None = None
 
 
 # --- heartbeat ---

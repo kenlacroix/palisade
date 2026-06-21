@@ -95,9 +95,12 @@ func cmdEnroll(args []string) error {
 	}
 
 	if err := config.Save(&config.Config{
-		AgentID:     resp.AgentID,
-		AgentSecret: resp.AgentSecret,
-		Server:      *server,
+		AgentID:       resp.AgentID,
+		AgentSecret:   resp.AgentSecret,
+		Server:        *server,
+		ClientCertPEM: resp.ClientCertPEM,
+		ClientKeyPEM:  resp.ClientKeyPEM,
+		CACertPEM:     resp.CACertPEM,
 	}); err != nil {
 		return err
 	}
@@ -124,9 +127,14 @@ func cmdRun(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	c, err := client.NewWithCerts(cfg.Server, cfg.AgentSecret, cfg.ClientCertPEM, cfg.ClientKeyPEM, cfg.CACertPEM)
+	if err != nil {
+		return fmt.Errorf("build client: %w", err)
+	}
+
 	a := &agent{
 		cfg:     cfg,
-		client:  client.New(cfg.Server, cfg.AgentSecret),
+		client:  c,
 		scanner: scan.New(),
 		// assetIDs is populated by discover jobs: "<host>:<port>" -> asset id.
 		assetIDs: map[string]string{},

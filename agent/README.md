@@ -39,9 +39,11 @@ GOOS=linux GOARCH=arm64 go build -o palisade-arm64 ./cmd/palisade
 palisade enroll --token PLS-7F3A-9C21-LK48 --server https://control.palisade.sh
 ```
 
-This calls `POST /v1/agents/enroll` and stores `{agent_id, agent_secret,
-server}` to `$PALISADE_HOME/config.json` (default `./.palisade/config.json`,
-mode `0600`). The enroll token is **single-use** server-side: it mints exactly
+This calls `POST /v1/agents/enroll` and stores `{agent_id, agent_secret, server}`
+plus the issued mTLS client cert (`client_cert_pem`, `client_key_pem`,
+`ca_cert_pem`) to `$PALISADE_HOME/config.json` (default
+`./.palisade/config.json`, mode `0600`). The enroll token is **single-use**
+server-side: it mints exactly
 one agent, binds it to the token's org, and is then marked used (re-enrolling
 with the same token returns 401). Override the directory with `PALISADE_HOME`:
 
@@ -83,17 +85,19 @@ implemented).
 
 ## Auth
 
-This scaffold authenticates agents with a **bearer token**: enrollment returns
-an `agent_secret` sent as `Authorization: Bearer <agent_secret>` on every later
-call. The production target is **mTLS** (client cert issued at enrollment); see
-the `TODO(mTLS)` in `internal/client`.
+Enrollment returns both an `agent_secret` and an **mTLS client cert** (issued by
+the control plane's internal CA). Over an **https** server the agent presents the
+stored client cert + key for mutual TLS (CA PEM as the trusted root); over
+plaintext **http** it falls back to `Authorization: Bearer <agent_secret>`. The
+server prefers the cert when both are sent, and can require it via
+`PALISADE_REQUIRE_MTLS`. See `client.NewWithCerts` in `internal/client`.
 
 ## Layout
 
 ```
 cmd/palisade/main.go      CLI + steady-state loop
-internal/config           config.json persistence (PALISADE_HOME aware)
-internal/client           control-plane HTTP client (bearer; mTLS TODO)
+internal/config           config.json persistence (PALISADE_HOME aware; stores mTLS cert/key/CA)
+internal/client           control-plane HTTP client (mTLS over https; bearer over http)
 internal/catalog          shared wire types + detection format
 internal/discover         /proc/net/tcp{,6} listening-socket enumeration
 internal/scan             detection execution + matcher engine + fingerprint
@@ -119,7 +123,6 @@ The evidence key is the first matched matcher's key, e.g. `dsl:duration>=5`,
 
 ## TODO
 
-- [ ] mTLS instead of bearer auth (`internal/client`).
 - [ ] Real minisign verification of catalog bundles before execution
       (`cmd/palisade`, `runScan`).
 - [ ] `engine: module` execution (`internal/scan`).

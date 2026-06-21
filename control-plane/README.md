@@ -54,6 +54,9 @@ All knobs live in `app/config.py` and are read from env. See `.env.example`.
 | `PALISADE_CORS_ORIGINS` | localhost:5173/3000 | Set to your UI domain on the VPS. |
 | `PALISADE_DETECTIONS_DIR` | repo `detections/` | Container sets `/app/detections`. |
 | `PALISADE_SIGNING_KEY` | unset (`"stub"`) | Ed25519 seed (base64) for catalog bundle signing. |
+| `PALISADE_REQUIRE_MTLS` | unset (off) | When set (`1`/`true`/`yes`), agent calls require a verified client cert; the bearer fallback is rejected. |
+| `PALISADE_MTLS_HEADER` | `x-client-cert` | Header carrying the PEM client cert from the TLS-terminating proxy. |
+| `PALISADE_MTLS_CERT_DAYS` | `397` | Validity window (days) for client certs issued at enroll. |
 | `ANTHROPIC_API_KEY` | unset | Enables AI drafting (`/v1/detections/draft`) + finding triage. |
 | `PALISADE_DRAFT_MODEL` | `claude-opus-4-8` | Model for CVE-URL drafting. |
 | `PALISADE_TRIAGE_MODEL` | `claude-haiku-4-5-20251001` | Model for finding triage. |
@@ -142,10 +145,44 @@ on `/v1/agents`, `/v1/scans`, and `/v1/catalog`) and **user sessions** (`Authori
   binds it to the token's org, and is marked used. Seeded from
   `PALISADE_ENROLL_TOKENS` at bootstrap.
 - **Postgres RLS:** run the app as a **non-owner** role in prod — the table owner
-  bypasses RLS. Bootstrap relies on owner-bypass to seed cross-org rows. Known
-  limitation: the `/v1/detections` catalog `tenants_hit` / `tenants_total`
-  cross-tenant aggregate is RLS-scoped on Postgres and needs a
-  security-definer/unscoped path to be a true platform metric (prod follow-up).
+  bypasses RLS. Bootstrap relies on owner-bypass to seed cross-org rows. The
+  `/v1/detections` catalog `tenants_hit` / `tenants_total` cross-tenant aggregate
+  used to be RLS-clipped to the caller's org on Postgres; it's now resolved via
+  the `SECURITY DEFINER` functions `palisade_org_count()` and
+  `palisade_detection_tenant_hits()` (migration 0004), which run as the migration
+  owner and bypass RLS to count across all tenants. SQLite (no RLS) keeps the
+  inline aggregate.
+
+### Agent mTLS
+
+Agent calls authenticate one of two ways. Over plaintext **http** (the demo) the
+agent sends `Authorization: Bearer <agent_secret>`. In production the control
+plane runs an internal EC P-256 CA (a single `cert_authority` row, auto-created
+at bootstrap by `app/mtls.py:ensure_ca`); `POST /v1/agents/enroll` now also
+returns `client_cert_pem`, `client_key_pem`, and `ca_cert_pem`, and the agent
+row stores `cert_fingerprint` + `cert_not_after`.
+
+TLS termination and client-cert verification run at a reverse proxy (the
+standard pattern — uvicorn does not terminate TLS itself). The proxy forwards
+the verified client cert PEM in `PALISADE_MTLS_HEADER` (default `x-client-cert`);
+`require_agent` (`app/auth.py`) verifies it against the internal CA and validity
+window, then maps the fingerprint to its agent. nginx:
+
+```nginx
+ssl_client_certificate /etc/palisade/ca.pem;   # ca_cert_pem from enroll
+ssl_verify_client      on;
+location /v1/agents/ {
+    proxy_set_header X-Client-Cert $ssl_client_escaped_cert;
+    proxy_pass http://control_plane;
+}
+```
+
+The bearer `agent_secret` remains the dev/plaintext fallback **unless**
+`PALISADE_REQUIRE_MTLS` is set, in which case a valid client cert is required and
+bearer is rejected. Cert validity is `PALISADE_MTLS_CERT_DAYS` (default 397).
+Issuing certs needs `cryptography` (in `requirements.txt`); the CA table, agent
+cert columns, and the catalog `SECURITY DEFINER` functions all land in migration
+0004.
 
 ## Alerting (M3)
 
@@ -175,11 +212,6 @@ moved off the request path into the same background mechanism.
 
 ## Production TODOs
 
-- **mTLS:** agent calls authenticate with a bearer `agent_secret` returned by
-  enroll. Production target is mTLS client certs (SPEC section 8). Not yet done.
-- **Catalog aggregate under RLS:** the `/v1/detections` cross-tenant
-  `tenants_hit` / `tenants_total` metric is RLS-scoped on Postgres and needs a
-  security-definer/unscoped path to count across all orgs.
 - **Detection engine:** only the `nuclei` engine runs; `module` detections are
   not yet executable.
 - **Queue/worker:** alerting delivery and AI triage run in FastAPI
@@ -187,6 +219,15 @@ moved off the request path into the same background mechanism.
 
 ## Implemented
 
+- **Agent mTLS:** enroll issues an EC P-256 client cert from an internal CA;
+  `require_agent` verifies the proxy-forwarded cert against the CA and maps the
+  fingerprint to its agent. Bearer `agent_secret` stays the plaintext fallback
+  unless `PALISADE_REQUIRE_MTLS` forces certs. See the **Agent mTLS** section
+  above (`app/mtls.py`, `app/auth.py`, migration 0004).
+- **Catalog cross-tenant aggregate:** `/v1/detections` `tenants_hit` /
+  `tenants_total` is correct platform-wide again — on Postgres it uses the
+  `SECURITY DEFINER` functions from migration 0004 to bypass RLS; SQLite keeps
+  the inline aggregate (`app/routers/read.py`).
 - **Version range matching:** scan targeting matches on `match.service` **and**
   `match.versions` (comma/space-separated constraints; unknown asset versions
   fail open). See `app/version_match.py`.

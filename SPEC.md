@@ -112,9 +112,10 @@ alerting all live server-side.
 
 **0. Enroll (once).** `POST /v1/agents/enroll {token, hostinfo}` → server
 validates a single-use token, joins the agent to the token's org, and returns
-`agent_id` + `agent_secret` (the target is an mTLS client cert; 15-min token
-expiry is not yet enforced). Agent stores the secret; all later agent calls send
-it as `Authorization: Bearer <agent_secret>`.
+`agent_id` + `agent_secret` **and** an mTLS client cert (`client_cert_pem`,
+`client_key_pem`, `ca_cert_pem`) issued by the internal CA (15-min token expiry
+is not yet enforced). Over https the agent presents the client cert for mutual
+TLS; over plaintext http it falls back to `Authorization: Bearer <agent_secret>`.
 
 **1. Heartbeat (the clock).** Every ~30s `POST /v1/agents/{id}/heartbeat
 {version,status,capacity}` → `{jobs:[{type:"discover"|"scan",...}]}`. Server
@@ -216,7 +217,7 @@ alert(id, org_id, finding_id, channel, sent_at, status)
 audit_log(id, org_id, actor, action, target, at)
 ```
 
-- **Isolation:** Postgres **Row-Level Security** keyed on `org_id` for every tenant table. Belt-and-suspenders with app-layer org scoping. **Implemented** (migration 0003) on agent, asset, scan, finding, alert_channel, alert_rule, alert, posture_snapshot, keyed on the `app.current_org_id` GUC the app sets per request; skipped on SQLite. The app must run as a **non-owner** Postgres role in prod (owner bypasses RLS; bootstrap relies on owner-bypass to seed). *Known limitation:* the `/v1/detections` cross-tenant `tenants_hit`/`tenants_total` aggregate is RLS-scoped on Postgres and needs a security-definer/unscoped path to be a true platform metric.
+- **Isolation:** Postgres **Row-Level Security** keyed on `org_id` for every tenant table. Belt-and-suspenders with app-layer org scoping. **Implemented** (migration 0003) on agent, asset, scan, finding, alert_channel, alert_rule, alert, posture_snapshot, keyed on the `app.current_org_id` GUC the app sets per request; skipped on SQLite. The app must run as a **non-owner** Postgres role in prod (owner bypasses RLS; bootstrap relies on owner-bypass to seed). The `/v1/detections` cross-tenant `tenants_hit`/`tenants_total` aggregate — previously RLS-clipped to the caller's org on Postgres — is now resolved via the `SECURITY DEFINER` functions `palisade_org_count()` and `palisade_detection_tenant_hits()` (migration 0004), which run as the migration owner to count across all tenants; SQLite keeps the inline aggregate.
 - *Implementation note:* users are stored in `app_user` with a separate `membership(user_id, org_id, role)` join (a user can belong to many orgs), not a single `org_id` on the user row; sessions live in `user_session`; single-use enroll tokens in `enroll_token`.
 - `evidence` and any raw payloads encrypted at rest (per-org key envelope) — *not yet implemented.*
 
@@ -255,8 +256,8 @@ Custom-module detections reference a compiled Go module by `spec_ref` instead of
 ## 8. API (key endpoints)
 
 ```
-# agent-authenticated (Authorization: Bearer <agent_secret>; mTLS is the target)
-POST /v1/agents/enroll            {token}            -> {agent_id, agent_secret}
+# agent-authenticated (mTLS client cert over https; Bearer <agent_secret> over http)
+POST /v1/agents/enroll            {token}  -> {agent_id, agent_secret, client_cert_pem, client_key_pem, ca_cert_pem}
 POST /v1/agents/{id}/heartbeat    {version,status}   -> {jobs:[...]}
 POST /v1/agents/{id}/assets       [...]              -> {asset_ids}
 POST /v1/scans/{id}/findings      [normalized...]    -> 202
@@ -281,9 +282,12 @@ POST /v1/alert-channels/{id}/test                    -> {ok, error}   (admin+)
 GET/POST/PATCH/DELETE /v1/alert-rules[/{id}]                     (admin+ to mutate)
 ```
 
-> **Auth note (implemented):** enrollment returns a bearer `agent_secret`, not an
-> mTLS cert; tokens are single-use but not yet 15-min-expiring. mTLS remains the
-> production target (section 11).
+> **Auth note (implemented):** enrollment returns both a bearer `agent_secret`
+> and an mTLS client cert (`client_cert_pem`/`client_key_pem`/`ca_cert_pem`)
+> from the internal CA. The agent uses mTLS over https and the bearer over http;
+> the control plane verifies the proxy-forwarded client cert against the CA and
+> can require it via `PALISADE_REQUIRE_MTLS`. Tokens are single-use but not yet
+> 15-min-expiring.
 
 ---
 

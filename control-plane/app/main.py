@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
-from . import config
+from . import config, mtls
 from .catalog import seed_detections
 from .config import cors_origins
 from .db import SessionLocal, init_db
@@ -48,6 +48,9 @@ def _bootstrap() -> None:
             if db.get(EnrollToken, tok) is None:
                 db.add(EnrollToken(token=tok, org_id=DEMO_ORG_ID, label="seed"))
         db.commit()
+
+        # Ensure the platform-wide agent CA exists on first boot.
+        mtls.ensure_ca(db)
 
         seed_detections(db)
     finally:

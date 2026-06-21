@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from .. import snapshots
@@ -190,14 +190,25 @@ def list_detections(
 ) -> DetectionsList:
     # Detections are a global catalog (not org-scoped); login is still required.
     detections = db.execute(select(Detection)).scalars().all()
-    tenants_total = db.execute(select(func.count()).select_from(Org)).scalar_one()
 
-    # tenants_hit: distinct orgs with an active finding for each detection.
-    hit_rows = db.execute(
-        select(Finding.detection_id, func.count(func.distinct(Finding.org_id)))
-        .where(Finding.status.in_(ACTIVE_STATUSES))
-        .group_by(Finding.detection_id)
-    ).all()
+    # tenants_total / tenants_hit are platform-wide metrics. On Postgres, RLS
+    # (migration 0003) clips `org`/`finding` to the caller's org, so the inline
+    # aggregate would only ever see the current org. The SECURITY DEFINER
+    # functions from 0004 run as the migration owner and bypass RLS to see all
+    # tenants. SQLite has no RLS, so it keeps the plain inline aggregate.
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        tenants_total = db.execute(text("SELECT palisade_org_count()")).scalar_one()
+        hit_rows = db.execute(
+            text("SELECT detection_id, n_orgs FROM palisade_detection_tenant_hits()")
+        ).all()
+    else:
+        tenants_total = db.execute(select(func.count()).select_from(Org)).scalar_one()
+        # tenants_hit: distinct orgs with an active finding for each detection.
+        hit_rows = db.execute(
+            select(Finding.detection_id, func.count(func.distinct(Finding.org_id)))
+            .where(Finding.status.in_(ACTIVE_STATUSES))
+            .group_by(Finding.detection_id)
+        ).all()
     hits = {det_id: n for det_id, n in hit_rows}
 
     rows = [

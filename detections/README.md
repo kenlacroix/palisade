@@ -94,9 +94,12 @@ A reported finding's `fingerprint` is
    ```
    Every file must print `PASS`.
 
+## Auth
+
+- Agent calls use **mTLS** over https (client cert issued at enroll), with the
+  bearer `agent_secret` as the plaintext-http fallback.
+
 ## TODO
 
-- Production auth is **mTLS** for agent calls; the current scaffold uses a bearer
-  `agent_secret`. Migrate to client-cert auth before GA.
 - `signature` is stubbed (`"stub"`). Implement minisign signing + agent-side
   verification of the bundle before execution.

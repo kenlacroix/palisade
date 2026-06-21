@@ -56,6 +56,10 @@ class Agent(Base):
     # cycle bookkeeping so heartbeat does not infinitely re-issue jobs
     last_discover_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_scan_issued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # mTLS identity issued at enroll: sha256 fingerprint (hex) of the client
+    # cert's DER and its expiry. Null for agents enrolled before mTLS / bearer-only.
+    cert_fingerprint: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    cert_not_after: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -235,3 +239,13 @@ class PostureSnapshot(Base):
     high: Mapped[int] = mapped_column(Integer, default=0)
     medium: Mapped[int] = mapped_column(Integer, default=0)
     assets_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+# --- mTLS: internal certificate authority (single platform-wide row) ---
+class CertAuthority(Base):
+    __tablename__ = "cert_authority"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default="default")
+    cert_pem: Mapped[str] = mapped_column(String)
+    key_pem: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

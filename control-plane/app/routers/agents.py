@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import require_agent
+from .. import mtls
 from ..db import get_db
 from ..models import Agent, Asset, Detection, EnrollToken, Scan
 from ..version_match import service_matches
@@ -55,10 +56,21 @@ def enroll(req: EnrollRequest, db: Session = Depends(get_db)) -> EnrollResponse:
     token.used_at = _now()
     token.agent_id = agent.id
     db.commit()
+
+    # Issue an mTLS client cert bound to this agent. Bearer agent_secret is still
+    # returned as the dev/plaintext fallback.
+    cert = mtls.issue_client_cert(db, agent.id, agent.org_id)
+    agent.cert_fingerprint = cert["fingerprint"]
+    agent.cert_not_after = cert["not_after"]
+    db.commit()
+
     return EnrollResponse(
         agent_id=agent.id,
         agent_secret=agent.secret,
         heartbeat_interval_s=HEARTBEAT_INTERVAL_S,
+        client_cert_pem=cert["client_cert_pem"],
+        client_key_pem=cert["client_key_pem"],
+        ca_cert_pem=cert["ca_cert_pem"],
     )
 
 

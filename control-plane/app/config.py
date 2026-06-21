@@ -36,6 +36,20 @@ DEMO_USER_PASSWORD = os.environ.get("PALISADE_DEMO_USER_PASSWORD", "palisade")
 SESSION_TTL_S = int(os.environ.get("PALISADE_SESSION_TTL_S", str(7 * 24 * 3600)))
 
 
+# --- agent mTLS (production hardening) ---
+# When true, agent endpoints REQUIRE a verified client cert and the bearer-secret
+# fallback is rejected. Default false so the plaintext demo/dev still works.
+def require_mtls() -> bool:
+    return os.environ.get("PALISADE_REQUIRE_MTLS", "").lower() in ("1", "true", "yes")
+
+
+# Header carrying the PEM client cert from a TLS-terminating proxy (nginx
+# $ssl_client_escaped_cert / Caddy). The app verifies it against the internal CA.
+MTLS_CERT_HEADER = os.environ.get("PALISADE_MTLS_HEADER", "x-client-cert")
+# Validity window for issued client certs (days).
+MTLS_CERT_DAYS = int(os.environ.get("PALISADE_MTLS_CERT_DAYS", "397"))
+
+
 def cors_origins() -> list[str]:
     raw = os.environ.get(
         "PALISADE_CORS_ORIGINS",

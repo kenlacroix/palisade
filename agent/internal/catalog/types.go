@@ -19,11 +19,16 @@ type EnrollRequest struct {
 	Host        HostInfo `json:"host"`
 }
 
-// EnrollResponse is the enroll reply containing the agent secret.
+// EnrollResponse is the enroll reply containing the agent secret. When the
+// control plane issues a client certificate, the PEM fields are populated and
+// the agent presents them for mutual TLS on subsequent https calls.
 type EnrollResponse struct {
 	AgentID            string `json:"agent_id"`
 	AgentSecret        string `json:"agent_secret"`
 	HeartbeatIntervalS int    `json:"heartbeat_interval_s"`
+	ClientCertPEM      string `json:"client_cert_pem,omitempty"`
+	ClientKeyPEM       string `json:"client_key_pem,omitempty"`
+	CACertPEM          string `json:"ca_cert_pem,omitempty"`
 }
 
 // ---- heartbeat / jobs ----
