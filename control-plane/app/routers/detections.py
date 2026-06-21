@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from ..catalog import bundle_version
 from ..config import ANTHROPIC_API_KEY, DRAFT_MODEL
 from ..db import get_db
-from ..models import Detection
+from ..models import Detection, User
+from ..tenancy import current_user, require_role
 from ..schemas import (
     AcceptDetectionRequest,
     AcceptDetectionResponse,
@@ -44,7 +45,9 @@ def _fetch(url: str) -> str:
 
 
 @router.post("/draft", response_model=DraftResponse)
-def draft_from_cve_url(body: DraftRequest) -> DraftResponse:
+def draft_from_cve_url(
+    body: DraftRequest, user: User = Depends(current_user)
+) -> DraftResponse:
     if not ANTHROPIC_API_KEY:
         raise HTTPException(
             status_code=503,
@@ -81,9 +84,11 @@ def draft_from_cve_url(body: DraftRequest) -> DraftResponse:
 @router.post("", response_model=AcceptDetectionResponse)
 def accept_detection(
     body: AcceptDetectionRequest,
+    user: User = Depends(current_user),
+    _: str = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ) -> AcceptDetectionResponse:
-    # Reviewer UI persists an approved draft. No auth — matches the read.py BFF.
+    # Reviewer UI persists an approved draft. Admin/owner only.
     spec: dict = {
         "id": body.id,
         "title": body.title,

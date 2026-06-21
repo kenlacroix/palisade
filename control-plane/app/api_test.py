@@ -92,6 +92,19 @@ def _enroll(client):
     return e["agent_id"], {"Authorization": f"Bearer {e['agent_secret']}"}
 
 
+def _session(client):
+    """Log in as the seeded demo user (owner) and return its bearer header.
+
+    BFF/read endpoints now require a user session distinct from agent secrets.
+    """
+    r = client.post(
+        "/v1/auth/login",
+        json={"email": "demo@palisade.local", "password": "palisade"},
+    )
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['token']}"}
+
+
 def _heartbeat(client, agent_id, auth):
     r = client.post(
         f"/v1/agents/{agent_id}/heartbeat",
@@ -125,7 +138,11 @@ def test_draft_requires_api_key():
     client, db_path = _make_client()
     try:
         with client:
-            r = client.post("/v1/detections/draft", json={"cve_url": "https://example.com/cve"})
+            r = client.post(
+                "/v1/detections/draft",
+                json={"cve_url": "https://example.com/cve"},
+                headers=_session(client),
+            )
             assert r.status_code == 503, r.text
     finally:
         _cleanup(db_path)
@@ -139,18 +156,19 @@ def test_accept_detection_closes_loop():
             r = client.get("/v1/catalog/bundle?since=0", headers={"Authorization": "Bearer x"})
             # bundle needs agent auth; enroll first for the version read.
             agent_id, auth = _enroll(client)
+            sess = _session(client)
             r = client.get("/v1/catalog/bundle?since=0", headers=auth)
             assert r.status_code == 200, r.text
             old_version = r.json()["version"]
 
-            r = client.post("/v1/detections", json=_accept_body())
+            r = client.post("/v1/detections", json=_accept_body(), headers=sess)
             assert r.status_code == 200, r.text
             accepted = r.json()
             assert accepted["id"] == "acme-rce"
             assert accepted["version"] == old_version + 1, accepted
 
             # read list shows it with cvss + bumped version
-            r = client.get("/v1/detections")
+            r = client.get("/v1/detections", headers=sess)
             assert r.status_code == 200, r.text
             row = next(d for d in r.json()["detections"] if d["slug"] == "acme-rce")
             assert row["cvss"] == 7.5, row
@@ -163,7 +181,7 @@ def test_accept_detection_closes_loop():
             assert "acme-rce" in delta_ids, delta_ids
 
             # re-accepting the same id upserts and bumps again
-            r = client.post("/v1/detections", json=_accept_body())
+            r = client.post("/v1/detections", json=_accept_body(), headers=sess)
             assert r.status_code == 200, r.text
             assert r.json()["version"] == old_version + 2, r.json()
     finally:
@@ -206,7 +224,7 @@ def test_seeded_cvss_present():
             )
             assert det["cvss"] == 9.8, det
 
-            r = client.get("/v1/detections")
+            r = client.get("/v1/detections", headers=_session(client))
             assert r.status_code == 200, r.text
             row = next(
                 d for d in r.json()["detections"] if d["slug"] == "litellm-proxy-preauth-sqli"
@@ -297,7 +315,7 @@ def test_rescan_reissues_scan():
             jobs = _heartbeat(client, agent_id, auth)
             assert not any(j["type"] == "scan" for j in jobs), jobs
 
-            r = client.post("/v1/rescan")
+            r = client.post("/v1/rescan", headers=_session(client))
             assert r.status_code == 200, r.text
             nudged = r.json()["agents_nudged"]
             assert nudged >= 1, nudged
@@ -356,7 +374,7 @@ def _ingest_finding(client):
     )
     assert r.status_code == 202, r.text
 
-    r = client.get("/v1/findings?status=open&severity=critical")
+    r = client.get("/v1/findings?status=open&severity=critical", headers=_session(client))
     assert r.status_code == 200, r.text
     flist = r.json()["findings"]
     assert len(flist) == 1, flist
@@ -369,21 +387,28 @@ def test_mute_finding_wiring():
     try:
         with client:
             _, finding_id = _ingest_finding(client)
+            sess = _session(client)
 
-            r = client.get("/v1/posture/summary")
+            r = client.get("/v1/posture/summary", headers=sess)
             assert r.status_code == 200, r.text
             assert r.json()["counts"]["critical"] == 1, r.json()
 
             r = client.post(
-                f"/v1/findings/{finding_id}/mute", json={"reason": "accepted", "ttl_s": 600}
+                f"/v1/findings/{finding_id}/mute",
+                json={"reason": "accepted", "ttl_s": 600},
+                headers=sess,
             )
             assert r.status_code == 200, r.text
             assert r.json()["status"] == "muted", r.json()
 
-            r = client.get("/v1/posture/summary")
+            r = client.get("/v1/posture/summary", headers=sess)
             assert r.json()["counts"]["critical"] == 0, r.json()
 
-            r = client.post("/v1/findings/does-not-exist/mute", json={"reason": "x", "ttl_s": 1})
+            r = client.post(
+                "/v1/findings/does-not-exist/mute",
+                json={"reason": "x", "ttl_s": 1},
+                headers=sess,
+            )
             assert r.status_code == 404, r.text
     finally:
         _cleanup(db_path)
@@ -395,7 +420,9 @@ def test_triage_noop_when_unconfigured():
     try:
         with client:
             _, finding_id = _ingest_finding(client)
-            r = client.get("/v1/findings?status=open&severity=critical")
+            r = client.get(
+                "/v1/findings?status=open&severity=critical", headers=_session(client)
+            )
             assert r.status_code == 200, r.text
             f = next(x for x in r.json()["findings"] if x["id"] == finding_id)
             assert f["triage_priority"] is None, f

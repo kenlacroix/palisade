@@ -259,3 +259,113 @@ class PostureSummary(BaseModel):
     score: int
     counts: PostureCounts
     trend30d: list[int]
+
+
+# --- auth / multi-tenancy ---
+Role = Literal["owner", "admin", "member", "viewer"]
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class UserInfo(BaseModel):
+    id: str
+    email: str
+    name: str
+
+
+class MembershipRow(BaseModel):
+    org_id: str
+    org_name: str
+    role: Role
+
+
+class SessionInfo(BaseModel):
+    token: str
+    user: UserInfo
+    org_id: str
+    org_name: str
+    role: Role
+    memberships: list[MembershipRow]
+
+
+class MeResponse(BaseModel):
+    user: UserInfo
+    org_id: str
+    org_name: str
+    role: Role
+    memberships: list[MembershipRow]
+
+
+class SwitchOrgRequest(BaseModel):
+    org_id: str
+
+
+# --- alerting ---
+class AlertChannelCreate(BaseModel):
+    type: Literal["telegram", "email", "webhook"]
+    name: str
+    config: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
+
+
+class AlertChannelRow(BaseModel):
+    id: str
+    type: str
+    name: str
+    # Secret-bearing keys are redacted on read; see alerts router.
+    config: dict[str, Any]
+    enabled: bool
+    created_at: str | None
+
+
+class AlertChannelsList(BaseModel):
+    channels: list[AlertChannelRow]
+
+
+class AlertRuleCreate(BaseModel):
+    name: str
+    min_severity: Severity = "high"
+    on_events: list[Literal["new", "regressed"]] = Field(default_factory=lambda: ["new", "regressed"])
+    channel_id: str
+    enabled: bool = True
+
+
+class AlertRuleRow(BaseModel):
+    id: str
+    name: str
+    min_severity: str
+    on_events: list[str]
+    channel_id: str
+    channel_name: str
+    enabled: bool
+    created_at: str | None
+
+
+class AlertRulesList(BaseModel):
+    rules: list[AlertRuleRow]
+
+
+class AlertRow(BaseModel):
+    id: str
+    finding_id: str
+    title: str
+    host: str
+    severity: str
+    event: str
+    status: str
+    error: str | None
+    channel_name: str | None
+    created_at: str | None
+    sent_at: str | None
+
+
+class AlertsList(BaseModel):
+    alerts: list[AlertRow]
+
+
+class ChannelTestResponse(BaseModel):
+    ok: bool
+    error: str | None = None

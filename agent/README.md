@@ -41,7 +41,9 @@ palisade enroll --token PLS-7F3A-9C21-LK48 --server https://control.palisade.sh
 
 This calls `POST /v1/agents/enroll` and stores `{agent_id, agent_secret,
 server}` to `$PALISADE_HOME/config.json` (default `./.palisade/config.json`,
-mode `0600`). Override the directory with `PALISADE_HOME`:
+mode `0600`). The enroll token is **single-use** server-side: it mints exactly
+one agent, binds it to the token's org, and is then marked used (re-enrolling
+with the same token returns 401). Override the directory with `PALISADE_HOME`:
 
 ```sh
 PALISADE_HOME=/etc/palisade palisade enroll --token ... --server ...

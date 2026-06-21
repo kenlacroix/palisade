@@ -1,21 +1,91 @@
-import { useState } from "react";
-import { fetchAgents, relativeTime, useApi } from "./api.ts";
+import { useEffect, useState } from "react";
+import {
+  clearToken,
+  fetchAgents,
+  fetchMe,
+  getToken,
+  logout,
+  relativeTime,
+  switchOrg,
+  useApi,
+  type Session,
+} from "./api.ts";
 import Dashboard from "./screens/Dashboard.tsx";
 import Assets from "./screens/Assets.tsx";
 import FindingDetail from "./screens/FindingDetail.tsx";
 import Detections from "./screens/Detections.tsx";
 import AddAgent from "./screens/AddAgent.tsx";
+import Alerts from "./screens/Alerts.tsx";
+import Login from "./screens/Login.tsx";
 
-export type View = "dashboard" | "assets" | "detections" | "agent";
+export type View = "dashboard" | "assets" | "detections" | "alerts" | "agent";
 
 const NAV: { key: View; label: string; icon: string }[] = [
   { key: "dashboard", label: "Dashboard", icon: "▤" },
   { key: "assets", label: "Assets", icon: "▦" },
   { key: "detections", label: "Detections", icon: "⌖" },
+  { key: "alerts", label: "Alerts", icon: "✦" },
   { key: "agent", label: "Add agent", icon: "＋" },
 ];
 
+type AuthState = "checking" | "out" | "in";
+
 export default function App() {
+  const [auth, setAuth] = useState<AuthState>(getToken() ? "checking" : "out");
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    const drop = () => {
+      setSession(null);
+      setAuth("out");
+    };
+    window.addEventListener("palisade-unauthorized", drop);
+    return () => window.removeEventListener("palisade-unauthorized", drop);
+  }, []);
+
+  useEffect(() => {
+    if (auth !== "checking") return;
+    fetchMe()
+      .then((s) => {
+        setSession(s);
+        setAuth("in");
+      })
+      .catch(() => setAuth("out"));
+  }, [auth]);
+
+  if (auth === "checking") return <div className="flex h-full items-center justify-center text-slate-500">Loading…</div>;
+  if (auth === "out" || !session) {
+    return (
+      <Login
+        onAuthed={(s) => {
+          setSession(s);
+          setAuth("in");
+        }}
+      />
+    );
+  }
+
+  return (
+    <Shell
+      session={session}
+      onSession={setSession}
+      onSignOut={() => {
+        setSession(null);
+        setAuth("out");
+      }}
+    />
+  );
+}
+
+function Shell({
+  session,
+  onSession,
+  onSignOut,
+}: {
+  session: Session;
+  onSession: (s: Session) => void;
+  onSignOut: () => void;
+}) {
   const [view, setView] = useState<View>("dashboard");
   const [findingId, setFindingId] = useState<string | null>(null);
   const { data: agentsData } = useApi(fetchAgents, []);
@@ -23,6 +93,20 @@ export default function App() {
 
   const openFinding = (id: string) => setFindingId(id);
   const closeFinding = () => setFindingId(null);
+
+  const onSignOut_ = async () => {
+    try {
+      await logout();
+    } catch {
+      // ignore — clearing the token is enough to drop to login
+    }
+    clearToken();
+    onSignOut();
+  };
+
+  const onSwitchOrg = async (org_id: string) => {
+    onSession(await switchOrg(org_id));
+  };
 
   return (
     <div className="flex h-full">
@@ -50,19 +134,49 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="mt-auto space-y-2 px-2 pb-2 text-xs text-slate-500">
-          <div className="font-medium text-slate-400">Agents</div>
-          {agents.length === 0 ? (
-            <div className="text-slate-600">none enrolled</div>
-          ) : (
-            agents.map((a) => (
-              <div key={a.id} className="flex items-center gap-2">
-                <span className={a.online ? "text-emerald-400" : "text-slate-600"}>●</span>
-                <span className="text-slate-300">{a.name}</span>
-                <span className="ml-auto">{relativeTime(a.last_seen)}</span>
-              </div>
-            ))
-          )}
+
+        <div className="mt-auto space-y-4 px-2 pb-2">
+          <div className="space-y-2 text-xs text-slate-500">
+            <div className="font-medium text-slate-400">Agents</div>
+            {agents.length === 0 ? (
+              <div className="text-slate-600">none enrolled</div>
+            ) : (
+              agents.map((a) => (
+                <div key={a.id} className="flex items-center gap-2">
+                  <span className={a.online ? "text-emerald-400" : "text-slate-600"}>●</span>
+                  <span className="text-slate-300">{a.name}</span>
+                  <span className="ml-auto">{relativeTime(a.last_seen)}</span>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="space-y-2 border-t border-ink-700 pt-3 text-xs">
+            {session.memberships.length > 1 ? (
+              <select
+                value={session.org_id}
+                onChange={(e) => onSwitchOrg(e.target.value)}
+                className="w-full rounded-lg border border-ink-600 bg-ink-800 px-2 py-1 text-xs text-slate-300 outline-none focus:border-accent"
+              >
+                {session.memberships.map((m) => (
+                  <option key={m.org_id} value={m.org_id}>
+                    {m.org_name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="font-medium text-slate-300">{session.org_name}</div>
+            )}
+            <div className="text-slate-500">
+              {session.user.email} · <span className="text-slate-400">{session.role}</span>
+            </div>
+            <button
+              onClick={onSignOut_}
+              className="text-slate-500 hover:text-slate-300"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -76,6 +190,8 @@ export default function App() {
             <Assets />
           ) : view === "detections" ? (
             <Detections />
+          ) : view === "alerts" ? (
+            <Alerts role={session.role} />
           ) : (
             <AddAgent />
           )}

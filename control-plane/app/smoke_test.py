@@ -170,8 +170,17 @@ def _run(client, finding_fingerprint):
         headers=auth,
     )
 
+    # BFF/read APIs require a user session (demo owner), distinct from the
+    # agent secret used above.
+    r = client.post(
+        "/v1/auth/login",
+        json={"email": "demo@palisade.local", "password": "palisade"},
+    )
+    assert r.status_code == 200, r.text
+    sess = {"Authorization": f"Bearer {r.json()['token']}"}
+
     # findings read API
-    r = client.get("/v1/findings?status=open&severity=critical")
+    r = client.get("/v1/findings?status=open&severity=critical", headers=sess)
     assert r.status_code == 200, r.text
     flist = r.json()["findings"]
     assert len(flist) == 1, flist
@@ -179,13 +188,13 @@ def _run(client, finding_fingerprint):
     assert flist[0]["cve"] == "CVE-2026-42208"
 
     # assets read API shows the critical count
-    r = client.get("/v1/assets")
+    r = client.get("/v1/assets", headers=sess)
     assert r.status_code == 200, r.text
     ai = next(a for a in r.json()["assets"] if a["host"] == "ai.lab")
     assert ai["findings_critical"] == 1
 
     # 6) posture summary
-    r = client.get("/v1/posture/summary")
+    r = client.get("/v1/posture/summary", headers=sess)
     assert r.status_code == 200, r.text
     posture = r.json()
     assert posture["counts"]["critical"] == 1
@@ -195,10 +204,14 @@ def _run(client, finding_fingerprint):
     assert len(posture["trend30d"]) == 30
 
     # mute transitions status -> muted, drops from open posture
-    r = client.post(f"/v1/findings/{finding_id}/mute", json={"reason": "accepted risk", "ttl_s": 600})
+    r = client.post(
+        f"/v1/findings/{finding_id}/mute",
+        json={"reason": "accepted risk", "ttl_s": 600},
+        headers=sess,
+    )
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "muted"
-    r = client.get("/v1/posture/summary")
+    r = client.get("/v1/posture/summary", headers=sess)
     assert r.json()["counts"]["critical"] == 0
 
     print("SMOKE OK: enroll -> discover -> assets -> scan -> findings -> posture")

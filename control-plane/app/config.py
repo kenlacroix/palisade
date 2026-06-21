@@ -28,6 +28,14 @@ def enroll_tokens() -> set[str]:
     return {t.strip() for t in raw.split(",") if t.strip()}
 
 
+# --- multi-tenancy (M1) ---
+# Bootstrap seeds this user into the demo org so the demo logs in with one click.
+DEMO_USER_EMAIL = os.environ.get("PALISADE_DEMO_USER_EMAIL", "demo@palisade.local")
+DEMO_USER_PASSWORD = os.environ.get("PALISADE_DEMO_USER_PASSWORD", "palisade")
+# Session lifetime for the web UI bearer token (default 7 days).
+SESSION_TTL_S = int(os.environ.get("PALISADE_SESSION_TTL_S", str(7 * 24 * 3600)))
+
+
 def cors_origins() -> list[str]:
     raw = os.environ.get(
         "PALISADE_CORS_ORIGINS",

@@ -4,11 +4,11 @@ from fastapi import Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .config import enroll_tokens
 from .db import get_db
 from .models import Agent
+from .tenancy import _set_rls_org
 
-__all__ = ["enroll_tokens", "require_agent"]
+__all__ = ["require_agent"]
 
 
 # TODO(prod): replace bearer-token auth with mTLS client certs (SPEC: enroll
@@ -23,4 +23,6 @@ def require_agent(
     agent = db.execute(select(Agent).where(Agent.secret == secret)).scalar_one_or_none()
     if agent is None:
         raise HTTPException(status_code=401, detail="invalid agent secret")
+    # Scope Postgres RLS to the agent's org for the rest of this request.
+    _set_rls_org(db, agent.org_id)
     return agent

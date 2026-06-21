@@ -5,21 +5,48 @@ import type { Severity, Exposure } from "./data.ts";
 // with VITE_API_BASE (e.g. http://nas.lab:8000) when serving the built UI.
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+const TOKEN_KEY = "palisade_token";
+let token: string | null = localStorage.getItem(TOKEN_KEY);
+
+export function getToken(): string | null {
+  return token;
+}
+
+export function setToken(t: string): void {
+  token = t;
+  localStorage.setItem(TOKEN_KEY, t);
+}
+
+export function clearToken(): void {
+  token = null;
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (res.status === 401) {
+    clearToken();
+    window.dispatchEvent(new Event("palisade-unauthorized"));
+    throw new Error(`${path} → 401 Unauthorized`);
+  }
   if (!res.ok) throw new Error(`${path} → ${res.status} ${res.statusText}`);
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
-async function post<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`${path} → ${res.status} ${res.statusText}`);
-  return res.json() as Promise<T>;
-}
+const get = <T>(path: string) => request<T>("GET", path);
+const post = <T>(path: string, body?: unknown) => request<T>("POST", path, body);
+const patch = <T>(path: string, body?: unknown) => request<T>("PATCH", path, body);
+const del = <T>(path: string) => request<T>("DELETE", path);
 
 export interface ApiAsset {
   id: string;
@@ -121,6 +148,119 @@ export const draftDetection = (cveUrl: string) =>
 
 export const acceptDetection = (detection: DraftDetection) =>
   post<{ id: string; version: number }>("/v1/detections", detection);
+
+export type Role = "owner" | "admin" | "member" | "viewer";
+
+export interface Membership {
+  org_id: string;
+  org_name: string;
+  role: Role;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface Session {
+  user: AuthUser;
+  org_id: string;
+  org_name: string;
+  role: Role;
+  memberships: Membership[];
+}
+
+export interface LoginResponse extends Session {
+  token: string;
+}
+
+export const login = (email: string, password: string) =>
+  post<LoginResponse>("/v1/auth/login", { email, password });
+
+export const logout = () => post<void>("/v1/auth/logout");
+
+export const fetchMe = () => get<Session>("/v1/auth/me");
+
+export const switchOrg = (org_id: string) => post<Session>("/v1/auth/switch-org", { org_id });
+
+export interface AlertChannel {
+  id: string;
+  type: "telegram" | "email" | "webhook";
+  name: string;
+  config: Record<string, string>;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface AlertRule {
+  id: string;
+  name: string;
+  min_severity: Severity;
+  on_events: ("new" | "regressed")[];
+  channel_id: string;
+  channel_name: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface Alert {
+  id: string;
+  finding_id: string;
+  title: string;
+  host: string;
+  severity: Severity;
+  event: string;
+  status: "sent" | "failed" | "pending";
+  error: string | null;
+  channel_name: string;
+  created_at: string;
+  sent_at: string | null;
+}
+
+export const fetchAlerts = () => get<{ alerts: Alert[] }>("/v1/alerts");
+
+export const fetchChannels = () => get<{ channels: AlertChannel[] }>("/v1/alert-channels");
+
+export const createChannel = (body: {
+  type: AlertChannel["type"];
+  name: string;
+  config: Record<string, string>;
+  enabled: boolean;
+}) => post<AlertChannel>("/v1/alert-channels", body);
+
+export const updateChannel = (
+  id: string,
+  body: Partial<{ name: string; config: Record<string, string>; enabled: boolean }>,
+) => patch<AlertChannel>(`/v1/alert-channels/${id}`, body);
+
+export const deleteChannel = (id: string) => del<void>(`/v1/alert-channels/${id}`);
+
+export const testChannel = (id: string) =>
+  post<{ ok: boolean; error: string | null }>(`/v1/alert-channels/${id}/test`);
+
+export const fetchRules = () => get<{ rules: AlertRule[] }>("/v1/alert-rules");
+
+export const createRule = (body: {
+  name: string;
+  min_severity: Severity;
+  on_events: ("new" | "regressed")[];
+  channel_id: string;
+  enabled: boolean;
+}) => post<AlertRule>("/v1/alert-rules", body);
+
+export const updateRule = (
+  id: string,
+  body: Partial<{
+    name: string;
+    min_severity: Severity;
+    on_events: ("new" | "regressed")[];
+    channel_id: string;
+    enabled: boolean;
+  }>,
+) => patch<AlertRule>(`/v1/alert-rules/${id}`, body);
+
+export const deleteRule = (id: string) => del<void>(`/v1/alert-rules/${id}`);
 
 export function relativeTime(iso: string | null): string {
   if (!iso) return "never";
