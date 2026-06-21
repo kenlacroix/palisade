@@ -132,10 +132,12 @@ def test_live_agent_control_plane():
         # 3) synthetic socket table -> agent discovers exactly this one service
         _synthetic_proc_net(proc_net)
 
-        # 4) boot the real control plane (uvicorn) on a temp sqlite DB
+        # 4) boot the real control plane (uvicorn). Defaults to a temp sqlite DB;
+        #    set PALISADE_TEST_DATABASE_URL to exercise the loop on Postgres (RLS
+        #    path), which sqlite skips.
         cp_env = {
             **os.environ,
-            "DATABASE_URL": f"sqlite:///{db_path}",
+            "DATABASE_URL": os.environ.get("PALISADE_TEST_DATABASE_URL", f"sqlite:///{db_path}"),
             "PALISADE_ENROLL_TOKENS": ENROLL_TOKEN,
         }
         procs.append(subprocess.Popen(
