@@ -1,0 +1,32 @@
+id: jenkins-cli-arbitrary-file-read
+title: Jenkins CLI arbitrary file read (version banner)
+cve: CVE-2024-23897
+cvss: 9.8
+severity: critical
+category: self-hosted
+engine: nuclei
+match:
+  service: jenkins
+  versions: "<=2.441 || <=2.426.2"
+# Non-destructive: the real exploit abuses the CLI args4j @file expansion to read
+# files. Here we only read the unauthenticated root page and identify the build
+# via the X-Jenkins version header. No CLI command is sent.
+http:
+  - method: GET
+    path: /
+    matchers-condition: and
+    matchers:
+      - type: regex
+        part: header
+        regex: ["X-Jenkins:\\s*2\\."]
+      - type: word
+        part: header
+        words: ["X-Jenkins-Session"]
+remediation: |
+  Upgrade Jenkins to >=2.442 (weekly) or >=2.426.3 (LTS), which disable the
+  args4j expandAtFiles feature. As an interim workaround, disable access to the
+  Jenkins CLI. Never expose the Jenkins controller directly to the internet.
+references:
+  - https://www.jenkins.io/security/advisory/2024-01-24/
+  - https://nvd.nist.gov/vuln/detail/CVE-2024-23897
+signature: stub

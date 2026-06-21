@@ -4,7 +4,9 @@ Attack-surface monitoring for self-hosted and AI-infra services. A pull-only
 agent enrolls once, discovers listening services on-host, and runs CVE
 detections locally — only normalized findings ever leave the host. A FastAPI
 control plane serves a signed detection catalog, ingests findings, scores
-posture, and drafts new detections from CVE advisories with an LLM.
+posture (with real 30-day trends), alerts on new/regressed findings, and drafts
+new detections from CVE advisories with an LLM. Multi-tenant: users, orgs,
+session auth, role-based access, and Postgres row-level isolation.
 
 ## Architecture
 
@@ -19,7 +21,13 @@ The loop: agent **enroll** → **heartbeat** → control plane issues a **discov
 job → agent reports **assets** → heartbeat issues a **scan** job (detections
 matched by service **and** version range) → agent pulls the **signed catalog
 bundle**, verifies it, runs detections on-host → reports **findings** →
-control plane scores **posture** and (optionally) **AI-triages** each finding.
+control plane scores **posture**, evaluates **alert rules** (delivering matching
+alerts in the background), and (optionally) **AI-triages** each finding off the
+request path.
+
+The web UI is multi-tenant: log in (`demo@palisade.local` / `palisade` in the
+demo), and all `/v1` read endpoints are scoped to your active org with role-based
+access (owner/admin/member/viewer).
 
 ## Quickstart (zero infra, sqlite)
 
@@ -89,10 +97,12 @@ In the **Detections** screen, **+ New from CVE URL** drafts a detection from an
 advisory with an LLM (requires `ANTHROPIC_API_KEY` on the control plane;
 otherwise the endpoint returns 503). Review the draft, then **Accept & ship** to
 persist it — this bumps the catalog version so agents pull it on their next
-bundle. Equivalent API call:
+bundle. Equivalent API call (admin+ session bearer required; see DEMO.md for
+`$TOKEN`):
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/v1/detections -H 'content-type: application/json' -d '{
+curl -s -X POST http://127.0.0.1:8000/v1/detections \
+  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{
   "id":"acme-rce","title":"ACME RCE","cve":"CVE-2026-9999","severity":"high",
   "category":"web","engine":"nuclei","match":{"service":"acme","versions":"<2.0.0"},
   "http":[{"method":"GET","path":"/x","matchers":[{"type":"status","status":[200]}]}],
@@ -110,11 +120,30 @@ skipped.
 
 ## AI triage
 
-When `ANTHROPIC_API_KEY` is set, new findings are scored on ingest
+When `ANTHROPIC_API_KEY` is set, new findings are scored after ingest
 (`triage_priority` / `triage_score` / `triage_rationale`, surfaced on the
-finding read API). Best-effort and inline — it never blocks or fails ingestion,
-and no-ops without a key. `PALISADE_TRIAGE_MODEL` overrides the model
-(default `claude-haiku-4-5-20251001`).
+finding read API). Best-effort and run in a background task off the ingest
+request path — it never blocks or fails ingestion, and no-ops without a key.
+`PALISADE_TRIAGE_MODEL` overrides the model (default
+`claude-haiku-4-5-20251001`).
+
+## Alerting
+
+Define **channels** (telegram / email / webhook) and **rules** (`min_severity` +
+`on_events` `[new|regressed]` → channel) from the **Alerts** screen or the API.
+On finding ingest, matching rules fire and alerts are delivered in a background
+task; an alert history is kept and surfaced at `GET /v1/alerts`. Channel secrets
+are redacted on read.
+
+```bash
+BASE=http://127.0.0.1:8000; UAUTH="Authorization: Bearer $TOKEN"   # see DEMO.md for $TOKEN
+# webhook channel + a rule that fires on any high+ new/regressed finding
+CH=$(curl -s -X POST $BASE/v1/alert-channels -H "$UAUTH" -H 'content-type: application/json' \
+  -d '{"type":"webhook","name":"local","config":{"url":"http://127.0.0.1:9000/hook"}}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+curl -s -X POST $BASE/v1/alert-rules -H "$UAUTH" -H 'content-type: application/json' \
+  -d "{\"name\":\"high+\",\"min_severity\":\"high\",\"on_events\":[\"new\",\"regressed\"],\"channel_id\":\"$CH\"}"
+```
 
 ## Tests
 
@@ -137,7 +166,10 @@ Key vars:
 | Var | Default | Notes |
 |-----|---------|-------|
 | `DATABASE_URL` | `sqlite:///./palisade.db` | Compose sets the Postgres URL. |
-| `PALISADE_ENROLL_TOKENS` | `PLS-DEMO` | Comma-separated accepted enroll tokens. |
+| `PALISADE_ENROLL_TOKENS` | `PLS-DEMO` | Comma-separated, single-use enroll tokens (each mints one agent into the token's org). |
+| `PALISADE_DEMO_USER_EMAIL` | `demo@palisade.local` | Demo org owner seeded at bootstrap. |
+| `PALISADE_DEMO_USER_PASSWORD` | `palisade` | Demo user password. |
+| `PALISADE_SESSION_TTL_S` | `604800` (7d) | Web UI bearer-session lifetime, seconds. |
 | `PALISADE_SIGNING_KEY` | unset (`"stub"`) | Ed25519 seed (base64) for bundle signing. |
 | `PALISADE_CATALOG_PUBKEY` | demo key | Agent-side pinned bundle pubkey (base64). |
 | `ANTHROPIC_API_KEY` | unset | Enables AI drafting + finding triage. |
@@ -145,11 +177,19 @@ Key vars:
 
 ## Status
 
-Scaffold (M0). Implemented: enroll/heartbeat/scan loop, signed catalog bundles,
-version-aware matching, AI drafting + accept loop, CVSS, AI triage, posture
-scoring. Production TODOs (see `SPEC.md` and inline `TODO(prod)` markers): mTLS
-client certs in place of bearer secrets, single-use enroll tokens, Postgres
-row-level security per `org_id`, the `module` detection engine, and offloading
-triage to a queue/worker.
+Implemented: enroll/heartbeat/scan loop, signed catalog bundles, version-aware
+matching, AI drafting + accept loop, CVSS, background AI triage, posture scoring
+with real 30-day trends, multi-tenancy (users/sessions/orgs + RBAC, single-use
+enroll tokens, Postgres row-level security per `org_id`), alerting
+(channels/rules/history), agent **mTLS** (enroll issues a client cert from an
+internal CA; verified at a TLS-terminating proxy, with the bearer `agent_secret`
+as the plaintext-demo fallback), and a `SECURITY DEFINER` path so the
+cross-tenant catalog aggregate (`tenants_hit` / `tenants_total`) is correct under
+RLS on Postgres, a durable **Arq + Redis** queue/worker for AI triage and
+alert delivery (with an in-process `BackgroundTasks` fallback when `REDIS_URL`
+is unset), and a pluggable **`module` detection engine** (a compiled `spec_ref`
+registry in the agent; first module is the Next.js middleware bypass,
+CVE-2025-29927). Production TODOs (see `SPEC.md` and inline `TODO(prod)`
+markers): per-org encryption of evidence at rest and alert quiet hours.
 </content>
 </invoke>

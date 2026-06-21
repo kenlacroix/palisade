@@ -19,11 +19,16 @@ type EnrollRequest struct {
 	Host        HostInfo `json:"host"`
 }
 
-// EnrollResponse is the enroll reply containing the agent secret.
+// EnrollResponse is the enroll reply containing the agent secret. When the
+// control plane issues a client certificate, the PEM fields are populated and
+// the agent presents them for mutual TLS on subsequent https calls.
 type EnrollResponse struct {
 	AgentID            string `json:"agent_id"`
 	AgentSecret        string `json:"agent_secret"`
 	HeartbeatIntervalS int    `json:"heartbeat_interval_s"`
+	ClientCertPEM      string `json:"client_cert_pem,omitempty"`
+	ClientKeyPEM       string `json:"client_key_pem,omitempty"`
+	CACertPEM          string `json:"ca_cert_pem,omitempty"`
 }
 
 // ---- heartbeat / jobs ----
@@ -107,10 +112,30 @@ type Detection struct {
 	Engine      string     `json:"engine"`   // nuclei|module
 	Match       Match      `json:"match"`
 	HTTP        []HTTPStep `json:"http,omitempty"`     // when engine=nuclei
-	SpecRef     string     `json:"spec_ref,omitempty"` // when engine=module
+	SpecRef     string     `json:"spec_ref,omitempty"` // when engine=module (compiled)
+	Flow        *Flow      `json:"flow,omitempty"`     // when engine=module (declarative)
 	Remediation string     `json:"remediation"`
 	References  []string   `json:"references"`
 	Signature   string     `json:"signature"`
+}
+
+// Flow is a declarative multi-step module detection shipped in the signed
+// bundle (approach B): the agent sends each request, captures the responses,
+// then requires every confirm expression to hold. No code executes — the agent
+// only interprets data — so the trust boundary stays the signed catalog.
+type Flow struct {
+	Requests []FlowRequest `json:"requests"`
+	Confirm  []string      `json:"confirm"`
+}
+
+// FlowRequest is one HTTP request in a flow, addressable by ID from confirm
+// expressions (e.g. status(baseline)).
+type FlowRequest struct {
+	ID      string            `json:"id"`
+	Method  string            `json:"method"`
+	Path    string            `json:"path"`
+	Body    string            `json:"body,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 // Match selects which assets a detection applies to.
@@ -121,18 +146,26 @@ type Match struct {
 
 // HTTPStep is one request + matcher set for the nuclei engine.
 type HTTPStep struct {
-	Method   string    `json:"method"`
-	Path     string    `json:"path"`
-	Body     string    `json:"body,omitempty"`
-	Matchers []Matcher `json:"matchers"`
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Body   string `json:"body,omitempty"`
+	// MatchersCondition combines the step's matchers: "and" (default) | "or".
+	MatchersCondition string    `json:"matchers-condition,omitempty"`
+	Matchers          []Matcher `json:"matchers"`
 }
 
-// Matcher evaluates a response. Type is "dsl" | "word" | "status".
+// Matcher evaluates a response. Type is "dsl" | "word" | "status" | "regex" |
+// "binary". Part selects "body" (default) or "header"; Negative inverts the
+// result.
 type Matcher struct {
-	Type   string   `json:"type"`
-	DSL    []string `json:"dsl,omitempty"`
-	Words  []string `json:"words,omitempty"`
-	Status []int    `json:"status,omitempty"`
+	Type     string   `json:"type"`
+	DSL      []string `json:"dsl,omitempty"`
+	Words    []string `json:"words,omitempty"`
+	Status   []int    `json:"status,omitempty"`
+	Regex    []string `json:"regex,omitempty"`
+	Binary   []string `json:"binary,omitempty"`
+	Part     string   `json:"part,omitempty"`
+	Negative bool     `json:"negative,omitempty"`
 }
 
 // ---- findings ----

@@ -111,8 +111,11 @@ alerting all live server-side.
 ```
 
 **0. Enroll (once).** `POST /v1/agents/enroll {token, hostinfo}` → server
-validates single-use 15-min token → returns mTLS client cert + `agent_id`.
-Agent stores cert, wipes token. All later calls are mTLS.
+validates a single-use token, joins the agent to the token's org, and returns
+`agent_id` + `agent_secret` **and** an mTLS client cert (`client_cert_pem`,
+`client_key_pem`, `ca_cert_pem`) issued by the internal CA (15-min token expiry
+is not yet enforced). Over https the agent presents the client cert for mutual
+TLS; over plaintext http it falls back to `Authorization: Bearer <agent_secret>`.
 
 **1. Heartbeat (the clock).** Every ~30s `POST /v1/agents/{id}/heartbeat
 {version,status,capacity}` → `{jobs:[{type:"discover"|"scan",...}]}`. Server
@@ -140,6 +143,12 @@ fingerprint → diff vs open → classify event → store.
  reappears after resolved ──────▶ regressed ──▶ alert
  user silences ─────────────────▶ muted (ttl)
 ```
+
+*Implemented:* alert-rule evaluation runs inside the ingest transaction; alert
+delivery and AI triage are enqueued onto a durable Arq + Redis queue and run by
+a worker process (off the request path, with restart-survival and retries). When
+`REDIS_URL` is unset they fall back to in-process background tasks so dev/SQLite
+needs no Redis.
 
 **The boundary:** on-host = discovery + detection execution + raw evidence;
 across the wire = normalized assets + findings only; control plane =
@@ -184,9 +193,11 @@ scheduling, matching, dedupe, AI triage, alerting, multi-tenant storage.
 - **Detection authoring assistant:** drafts a candidate template from a CVE advisory URL → author reviews/signs. Ties into your garak / LLM-sec work.
 - Guardrails: AI never auto-publishes detections; never sees raw internal response bodies unless opted in.
 
-### 5.7 Alerting
-- Channels: Telegram, email, generic webhook (reuse sentinel/BracketBot patterns).
-- Rules: severity threshold, new-only, per-asset mute, quiet hours.
+### 5.7 Alerting (implemented)
+- Channels: Telegram, email, generic webhook. Channel secrets redacted on read.
+- Rules: `min_severity` threshold + `on_events` (`new` | `regressed`) → channel,
+  plus per-finding mute (ttl). Quiet hours not yet implemented.
+- Alert history table; delivery in a background task.
 
 ---
 
@@ -208,8 +219,9 @@ alert(id, org_id, finding_id, channel, sent_at, status)
 audit_log(id, org_id, actor, action, target, at)
 ```
 
-- **Isolation:** Postgres **Row-Level Security** keyed on `org_id` for every tenant table. Belt-and-suspenders with app-layer org scoping.
-- `evidence` and any raw payloads encrypted at rest (per-org key envelope).
+- **Isolation:** Postgres **Row-Level Security** keyed on `org_id` for every tenant table. Belt-and-suspenders with app-layer org scoping. **Implemented** (migration 0003) on agent, asset, scan, finding, alert_channel, alert_rule, alert, posture_snapshot, keyed on the `app.current_org_id` GUC the app sets per request; skipped on SQLite. The app must run as a **non-owner** Postgres role in prod (owner bypasses RLS; bootstrap relies on owner-bypass to seed). The `/v1/detections` cross-tenant `tenants_hit`/`tenants_total` aggregate — previously RLS-clipped to the caller's org on Postgres — is now resolved via the `SECURITY DEFINER` functions `palisade_org_count()` and `palisade_detection_tenant_hits()` (migration 0004), which run as the migration owner to count across all tenants; SQLite keeps the inline aggregate.
+- *Implementation note:* users are stored in `app_user` with a separate `membership(user_id, org_id, role)` join (a user can belong to many orgs), not a single `org_id` on the user row; sessions live in `user_session`; single-use enroll tokens in `enroll_token`.
+- `evidence` and any raw payloads encrypted at rest (per-org key envelope) — *not yet implemented.*
 
 ---
 
@@ -239,23 +251,52 @@ references:
 signature: <minisign>
 ```
 
-Custom-module detections reference a compiled Go module by `spec_ref` instead of inline `http`.
+Custom-module detections reference a compiled Go module by `spec_ref` instead of
+inline `http`. *Implemented:* the agent resolves `spec_ref` against a registry of
+modules compiled into the binary, so the signed catalog only names a module and
+the trust boundary stays the agent binary — the control plane never ships code.
+First module: `modules/nextjs_middleware_bypass` (CVE-2025-29927), which confirms
+the bypass from the difference between two responses, logic a single nuclei
+matcher cannot express. Shipping modules as signed scripts in the bundle (dynamic
+distribution) is a planned follow-up.
 
 ---
 
 ## 8. API (key endpoints)
 
 ```
-POST /v1/agents/enroll            {token}            -> mTLS cert
+# agent-authenticated (mTLS client cert over https; Bearer <agent_secret> over http)
+POST /v1/agents/enroll            {token}  -> {agent_id, agent_secret, client_cert_pem, client_key_pem, ca_cert_pem}
 POST /v1/agents/{id}/heartbeat    {version,status}   -> {jobs:[...]}
+POST /v1/agents/{id}/assets       [...]              -> {asset_ids}
 POST /v1/scans/{id}/findings      [normalized...]    -> 202
 GET  /v1/catalog/bundle?since=ver                    -> signed bundle
-GET  /v1/assets                                       -> paginated
-GET  /v1/findings?status=open&severity=critical       -> paginated
-POST /v1/findings/{id}/mute        {reason,ttl}       -> finding
-GET  /v1/posture/summary                              -> trend series
-POST /v1/alerts/rules                                 -> rule
+
+# user-session-authenticated (Authorization: Bearer <session-token>), org-scoped
+POST /v1/auth/login               {email,password}   -> {token, org, role, memberships}
+POST /v1/auth/logout                                 -> 204
+GET  /v1/auth/me                                      -> current user/org/role
+POST /v1/auth/switch-org          {org_id}           -> current user/org/role
+GET  /v1/assets                                       -> list
+GET  /v1/findings?status=open&severity=critical       -> list
+POST /v1/findings/{id}/mute        {reason,ttl}       -> finding   (member+)
+POST /v1/rescan                                       -> nudge agents (member+)
+GET  /v1/posture/summary                              -> score + counts + trend30d
+GET  /v1/detections                                   -> catalog rows
+POST /v1/detections                {detection}        -> {id, version}  (admin+)
+POST /v1/detections/draft          {cve_url}          -> draft (AI)
+GET  /v1/alerts                                       -> alert history
+GET/POST/PATCH/DELETE /v1/alert-channels[/{id}]                  (admin+ to mutate)
+POST /v1/alert-channels/{id}/test                    -> {ok, error}   (admin+)
+GET/POST/PATCH/DELETE /v1/alert-rules[/{id}]                     (admin+ to mutate)
 ```
+
+> **Auth note (implemented):** enrollment returns both a bearer `agent_secret`
+> and an mTLS client cert (`client_cert_pem`/`client_key_pem`/`ca_cert_pem`)
+> from the internal CA. The agent uses mTLS over https and the bearer over http;
+> the control plane verifies the proxy-forwarded client cert against the CA and
+> can require it via `PALISADE_REQUIRE_MTLS`. Tokens are single-use but not yet
+> 15-min-expiring.
 
 ---
 
@@ -392,13 +433,13 @@ POST /v1/alerts/rules                                 -> rule
 
 **M0 — Skeleton (week 1–2):** repo, IaC, CI/CD, Postgres+RLS, FastAPI health, agent enroll + heartbeat, deployed live + status page.
 
-**M1 — Discover (week 2–3):** agent asset discovery → inventory UI. Multi-tenant auth + org RBAC.
+**M1 — Discover (week 2–3) — implemented:** agent asset discovery → inventory UI. Multi-tenant auth + org RBAC (users/sessions/memberships, owner/admin/member/viewer roles, single-use enroll tokens, Postgres Row-Level Security per `org_id`).
 
 **M2 — Detect (week 3–5):** Nuclei engine in agent, signed bundles, 10–15 seeded detections, findings pipeline + dashboard.
 
-**M3 — Triage + alert (week 5–6):** AI triage on findings, Telegram/email/webhook alerts + rules.
+**M3 — Triage + alert (week 5–6) — implemented:** AI triage on findings (background, off the ingest request path); Telegram/email/webhook alert channels + severity/event rules + alert history.
 
-**M4 — Author loop (week 6+):** "new detection from CVE URL" AI drafting + sign/publish. Posture trends.
+**M4 — Author loop (week 6+):** "new detection from CVE URL" AI drafting + sign/publish — implemented. Posture trends — implemented (real 30-day series from daily snapshots).
 
 **Post-MVP:** external/perimeter scan worker, more AI-infra detections, scheduled reports, customer due-diligence export.
 

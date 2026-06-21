@@ -27,7 +27,23 @@ def _matcher_values(matcher: dict) -> str:
         return ",".join(matcher.get("words") or [])
     if t == "status":
         return ",".join(str(c) for c in (matcher.get("status") or []))
+    if t == "regex":
+        return ",".join(matcher.get("regex") or [])
+    if t == "binary":
+        return ",".join(matcher.get("binary") or [])
     return ""
+
+
+def _matcher_key(matcher: dict) -> str:
+    # "type:values" plus "|part=" for a non-default part and "|neg" for a
+    # negative matcher. Must match the Go verifier's matchersString byte for byte.
+    key = matcher.get("type", "") + ":" + _matcher_values(matcher)
+    part = matcher.get("part") or ""
+    if part and part != "body":
+        key += "|part=" + part
+    if matcher.get("negative"):
+        key += "|neg"
+    return key
 
 
 def _http_field(det: dict) -> str:
@@ -38,11 +54,38 @@ def _http_field(det: dict) -> str:
         method = step.get("method", "")
         path = step.get("path", "")
         body = step.get("body") or ""
-        matchers = GS.join(
-            (m.get("type", "") + ":" + _matcher_values(m)) for m in (step.get("matchers") or [])
-        )
-        steps.append(method + SP + path + SP + body + SP + matchers)
+        matchers = GS.join(_matcher_key(m) for m in (step.get("matchers") or []))
+        step_str = method + SP + path + SP + body + SP + matchers
+        cond = step.get("matchers-condition") or ""
+        if cond and cond != "and":
+            step_str += SP + "cond=" + cond
+        steps.append(step_str)
     return RS.join(steps)
+
+
+def _flow_field(det: dict) -> str:
+    # Canonical segment for a declarative module flow. Every byte must match the
+    # Go verifier's flowString:
+    #   "flow" US <requests joined by RS> US <confirm exprs joined by GS>
+    # where each request is: id SP method SP path SP body SP <headers>, headers
+    # being "k=v" pairs sorted lexicographically and joined by ",".
+    flow = det.get("flow") or {}
+    reqs: list[str] = []
+    for r in flow.get("requests") or []:
+        headers = r.get("headers") or {}
+        hdrs = ",".join(sorted(f"{k}={v}" for k, v in headers.items()))
+        reqs.append(
+            SP.join([r.get("id", ""), r.get("method", ""), r.get("path", ""), r.get("body") or "", hdrs])
+        )
+    return "flow" + US + RS.join(reqs) + US + GS.join(flow.get("confirm") or [])
+
+
+def _engine_body(det: dict) -> str:
+    # Last canonical field: nuclei http steps, or a module's declarative flow.
+    # A spec_ref-only module has no body, so it hashes exactly as before.
+    if det.get("engine") == "module" and det.get("flow"):
+        return _flow_field(det)
+    return _http_field(det)
 
 
 def _canonical(det: dict) -> str:
@@ -60,7 +103,7 @@ def _canonical(det: dict) -> str:
             match.get("versions", ""),
             spec_ref,
             det["remediation"],
-            _http_field(det),
+            _engine_body(det),
         ]
     )
 

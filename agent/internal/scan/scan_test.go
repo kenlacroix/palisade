@@ -43,27 +43,30 @@ func TestEvalDSLDuration(t *testing.T) {
 
 func TestEvalMatchers(t *testing.T) {
 	body := []byte(`{"error":"sql syntax"}`)
+	r := func(status int, elapsed time.Duration) response {
+		return response{status: status, body: body, elapsed: elapsed}
+	}
 
 	// status matches
-	ok, key := evalMatchers([]catalog.Matcher{{Type: "status", Status: []int{200, 500}}}, 500, body, 0)
+	ok, key := evalMatchers([]catalog.Matcher{{Type: "status", Status: []int{200, 500}}}, "", r(500, 0))
 	if !ok || key != "status:500" {
 		t.Errorf("status matcher: ok=%v key=%q", ok, key)
 	}
 
 	// word matches all
-	ok, _ = evalMatchers([]catalog.Matcher{{Type: "word", Words: []string{"sql", "error"}}}, 200, body, 0)
+	ok, _ = evalMatchers([]catalog.Matcher{{Type: "word", Words: []string{"sql", "error"}}}, "", r(200, 0))
 	if !ok {
 		t.Error("word matcher should match")
 	}
 
 	// word fails if any missing
-	ok, _ = evalMatchers([]catalog.Matcher{{Type: "word", Words: []string{"sql", "absent"}}}, 200, body, 0)
+	ok, _ = evalMatchers([]catalog.Matcher{{Type: "word", Words: []string{"sql", "absent"}}}, "", r(200, 0))
 	if ok {
 		t.Error("word matcher should fail on missing word")
 	}
 
 	// dsl duration
-	ok, _ = evalMatchers([]catalog.Matcher{{Type: "dsl", DSL: []string{"duration>=5"}}}, 200, body, 5*time.Second)
+	ok, _ = evalMatchers([]catalog.Matcher{{Type: "dsl", DSL: []string{"duration>=5"}}}, "", r(200, 5*time.Second))
 	if !ok {
 		t.Error("dsl matcher should match on slow response")
 	}
@@ -73,11 +76,11 @@ func TestEvalMatchers(t *testing.T) {
 		{Type: "status", Status: []int{200}},
 		{Type: "dsl", DSL: []string{"duration>=5"}},
 	}
-	ok, key = evalMatchers(ms, 200, body, 5*time.Second)
+	ok, key = evalMatchers(ms, "", r(200, 5*time.Second))
 	if !ok || key != "status:200" {
 		t.Errorf("AND matchers: ok=%v key=%q (want first key status:200)", ok, key)
 	}
-	ok, _ = evalMatchers(ms, 200, body, time.Second)
+	ok, _ = evalMatchers(ms, "", r(200, time.Second))
 	if ok {
 		t.Error("AND matchers should fail when dsl fails")
 	}

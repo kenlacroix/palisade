@@ -2,9 +2,7 @@
 # (laptop, Proxmox, VPS) — only the .env values change. Copy .env.example to
 # .env and `docker compose up --build`.
 #
-# TODO(prod, SPEC section 11): Postgres + Row-Level Security keyed on org_id;
-#   Alembic migrations replacing create_all; Redis + worker service when AI
-#   triage lands. Not in M0.
+# TODO(prod, SPEC section 11): Postgres + Row-Level Security keyed on org_id.
 services:
   postgres:
     image: postgres:16
@@ -20,20 +18,50 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   api:
     build:
       context: ..
       dockerfile: control-plane/Dockerfile
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://palisade:palisade@postgres:5432/palisade}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       PALISADE_ENROLL_TOKENS: ${PALISADE_ENROLL_TOKENS:-PLS-DEMO}
       PALISADE_CORS_ORIGINS: ${PALISADE_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "${API_PORT:-8000}:8000"
     # Live-edit detections locally without a rebuild; image carries them for prod.
+    volumes:
+      - ../detections:/app/detections:ro
+
+  # Durable background work (AI triage, alert delivery). Same image as api.
+  worker:
+    build:
+      context: ..
+      dockerfile: control-plane/Dockerfile
+    command: ["arq", "app.worker.WorkerSettings"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://palisade:palisade@postgres:5432/palisade}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      PALISADE_TRIAGE_MODEL: ${PALISADE_TRIAGE_MODEL:-claude-haiku-4-5-20251001}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ../detections:/app/detections:ro
 

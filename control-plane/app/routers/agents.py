@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..auth import enroll_tokens, require_agent
+from ..auth import require_agent
+from .. import mtls
 from ..db import get_db
-from ..models import Agent, Asset, Detection, Scan
+from ..models import Agent, Asset, Detection, EnrollToken, Scan
 from ..version_match import service_matches
 from ..schemas import (
     AssetsRequest,
@@ -35,12 +36,14 @@ def _now() -> datetime:
 
 @router.post("/enroll", response_model=EnrollResponse)
 def enroll(req: EnrollRequest, db: Session = Depends(get_db)) -> EnrollResponse:
-    if req.enroll_token not in enroll_tokens():
-        raise HTTPException(status_code=401, detail="invalid enroll token")
-    # TODO(prod): enroll tokens should be single-use. For the demo we accept
-    #             repeated enrollment and mint a fresh agent each time.
+    # Enroll tokens are single-use: a token mints exactly one agent and joins it
+    # to the token's org. Seeded at bootstrap from PALISADE_ENROLL_TOKENS.
+    token = db.get(EnrollToken, req.enroll_token)
+    if token is None or token.used_at is not None:
+        raise HTTPException(status_code=401, detail="invalid or used enroll token")
     agent = Agent(
         id=str(uuid.uuid4()),
+        org_id=token.org_id,
         secret=secrets.token_urlsafe(32),
         hostname=req.host.hostname,
         os=req.host.os,
@@ -50,11 +53,24 @@ def enroll(req: EnrollRequest, db: Session = Depends(get_db)) -> EnrollResponse:
         last_seen=_now(),
     )
     db.add(agent)
+    token.used_at = _now()
+    token.agent_id = agent.id
     db.commit()
+
+    # Issue an mTLS client cert bound to this agent. Bearer agent_secret is still
+    # returned as the dev/plaintext fallback.
+    cert = mtls.issue_client_cert(db, agent.id, agent.org_id)
+    agent.cert_fingerprint = cert["fingerprint"]
+    agent.cert_not_after = cert["not_after"]
+    db.commit()
+
     return EnrollResponse(
         agent_id=agent.id,
         agent_secret=agent.secret,
         heartbeat_interval_s=HEARTBEAT_INTERVAL_S,
+        client_cert_pem=cert["client_cert_pem"],
+        client_key_pem=cert["client_key_pem"],
+        ca_cert_pem=cert["ca_cert_pem"],
     )
 
 
@@ -125,6 +141,7 @@ def heartbeat(
                 agent_id=agent.id,
                 status="issued",
                 assets_count=len(targets),
+                targets=targets,
             )
             db.add(scan)
             agent.last_scan_issued_at = _now()

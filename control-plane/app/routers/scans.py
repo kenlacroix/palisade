@@ -1,102 +1,76 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Depends, Path, Response
-from sqlalchemy import select
+from fastapi import APIRouter, BackgroundTasks, Depends, Path, Response
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .. import config
+from .. import alerting, config, queue
 from ..auth import require_agent
 from ..db import get_db
-from ..models import Agent, Asset, Detection, Finding
-from ..schemas import FindingsRequest
-from ..triage import triage_finding
+from ..ingest import Report, ingest_reports
+from ..models import Agent, Asset, Finding, Org
+from ..schemas import ExternalScanResponse, FindingsRequest
+from ..tasks import scan_external_assets, triage_findings
+from ..tenancy import current_org, require_role
 
 router = APIRouter(prefix="/v1/scans", tags=["scans"])
 
 
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
+@router.post("/external", response_model=ExternalScanResponse)
+def trigger_external_scan(
+    background: BackgroundTasks,
+    org: Org = Depends(current_org),
+    _: str = Depends(require_role("member")),
+    db: Session = Depends(get_db),
+) -> ExternalScanResponse:
+    """Kick a control-plane perimeter scan of the org's external-exposure assets
+    (attacker's-eye view). Durably enqueued; runs in the worker (or inline
+    without Redis). Returns immediately."""
+    n = db.execute(
+        select(func.count())
+        .select_from(Asset)
+        .where(Asset.org_id == org.id, Asset.exposure == "external")
+    ).scalar_one()
+    queue.enqueue(background, "scan_external_assets", scan_external_assets, org.id)
+    return ExternalScanResponse(enqueued=True, external_assets=n)
 
 
 @router.post("/{scan_id}/findings", status_code=202)
 def ingest_findings(
     req: FindingsRequest,
+    background: BackgroundTasks,
     scan_id: str = Path(...),
     agent: Agent = Depends(require_agent),
     db: Session = Depends(get_db),
 ) -> Response:
-    reported_keys: set[tuple[str, str]] = set()
-
-    for fr in req.findings:
-        reported_keys.add((fr.asset_id, fr.detection_id))
-        det = db.get(Detection, fr.detection_id)
-        severity = fr.severity or (det.severity if det else "info")
-
-        existing = db.execute(
-            select(Finding).where(Finding.fingerprint == fr.fingerprint)
-        ).scalar_one_or_none()
-
-        if existing is None:
-            # Unseen fingerprint -> open.
-            finding = Finding(
-                org_id=agent.org_id,
-                asset_id=fr.asset_id,
-                detection_id=fr.detection_id,
-                scan_id=scan_id,
-                severity=severity,
-                status="open",
-                fingerprint=fr.fingerprint,
-                evidence=fr.evidence.model_dump(),
-            )
-            # Best-effort inline AI triage. Never blocks or raises the request.
-            # TODO(prod): offload to a queue/worker instead of inline.
-            if config.ANTHROPIC_API_KEY:
-                try:
-                    asset = db.get(Asset, fr.asset_id)
-                    result = triage_finding(
-                        title=det.title if det else fr.detection_id,
-                        severity=severity,
-                        cve=det.cve if det else None,
-                        cvss=det.cvss if det else None,
-                        host=asset.host if asset else "",
-                        service=asset.service if asset else "",
-                        evidence_note=fr.evidence.note,
-                    )
-                    if result:
-                        finding.triage_priority = result["triage_priority"]
-                        finding.triage_score = result["triage_score"]
-                        finding.triage_rationale = result["triage_rationale"]
-                except Exception:
-                    pass
-            db.add(finding)
-        else:
-            # Seen and still reported -> bump last_seen.
-            existing.last_seen = _now()
-            existing.scan_id = scan_id
-            existing.evidence = fr.evidence.model_dump()
-            if existing.status == "resolved":
-                # resolved -> regressed on reappearance.
-                existing.status = "regressed"
-
-    # open -> resolved when a later scan of the same asset+detection does NOT
-    # report it. Best effort: scope to assets touched in this scan's targets.
-    # TODO(prod): track scan target manifest to resolve precisely; here we
-    #             resolve open findings for (asset,detection) pairs that share
-    #             an asset reported in this batch but were not re-reported.
-    touched_assets = {asset_id for asset_id, _ in reported_keys}
-    if touched_assets:
-        open_findings = db.execute(
-            select(Finding).where(
-                Finding.asset_id.in_(touched_assets),
-                Finding.status.in_(["open", "regressed"]),
-            )
-        ).scalars().all()
-        for f in open_findings:
-            if (f.asset_id, f.detection_id) not in reported_keys:
-                f.status = "resolved"
-                f.last_seen = _now()
-
+    reports = [
+        Report(
+            asset_id=fr.asset_id,
+            detection_id=fr.detection_id,
+            severity=fr.severity,
+            fingerprint=fr.fingerprint,
+            evidence=fr.evidence.model_dump(),
+        )
+        for fr in req.findings
+    ]
+    new_finding_ids, alert_events = ingest_reports(db, agent.org_id, scan_id, reports)
     db.commit()
+
+    # Offload AI triage so it never blocks the request. No-op without a key.
+    if config.ANTHROPIC_API_KEY and new_finding_ids:
+        queue.enqueue(background, "triage_findings", triage_findings, agent.org_id, new_finding_ids)
+
+    # Evaluate alert rules and enqueue, then deliver in the background.
+    alert_ids: list[str] = []
+    for fid, event in alert_events:
+        f = db.get(Finding, fid)
+        if f is None:
+            continue
+        alert_ids.extend(alerting.evaluate_and_enqueue(db, agent.org_id, f, event))
+    # Release any deferred alerts whose quiet window has since closed.
+    alert_ids.extend(alerting.release_due_deferred(db, agent.org_id))
+    if alert_ids:
+        db.commit()
+        queue.enqueue(background, "deliver_alerts", alerting.deliver_pending, agent.org_id, alert_ids)
+
     return Response(status_code=202)

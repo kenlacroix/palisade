@@ -25,6 +25,11 @@ class EnrollResponse(BaseModel):
     agent_id: str
     agent_secret: str
     heartbeat_interval_s: int = 30
+    # mTLS material issued at enroll. The agent presents client_cert_pem on every
+    # request once enrolled; bearer (agent_secret) remains the dev/plaintext path.
+    client_cert_pem: str | None = None
+    client_key_pem: str | None = None
+    ca_cert_pem: str | None = None
 
 
 # --- heartbeat ---
@@ -77,6 +82,8 @@ class Detection(BaseModel):
     match: DetectionMatch
     http: list[dict[str, Any]] | None = None
     spec_ref: str | None = None
+    # Declarative module flow (approach B), shipped in the signed bundle.
+    flow: dict[str, Any] | None = None
     remediation: str
     references: list[str]
     signature: str
@@ -221,6 +228,11 @@ class RescanResponse(BaseModel):
     agents_nudged: int
 
 
+class ExternalScanResponse(BaseModel):
+    enqueued: bool
+    external_assets: int
+
+
 class DetectionRow(BaseModel):
     slug: str
     title: str
@@ -259,3 +271,123 @@ class PostureSummary(BaseModel):
     score: int
     counts: PostureCounts
     trend30d: list[int]
+
+
+# --- auth / multi-tenancy ---
+Role = Literal["owner", "admin", "member", "viewer"]
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class UserInfo(BaseModel):
+    id: str
+    email: str
+    name: str
+
+
+class MembershipRow(BaseModel):
+    org_id: str
+    org_name: str
+    role: Role
+
+
+class SessionInfo(BaseModel):
+    token: str
+    user: UserInfo
+    org_id: str
+    org_name: str
+    role: Role
+    memberships: list[MembershipRow]
+
+
+class MeResponse(BaseModel):
+    user: UserInfo
+    org_id: str
+    org_name: str
+    role: Role
+    memberships: list[MembershipRow]
+
+
+class SwitchOrgRequest(BaseModel):
+    org_id: str
+
+
+# --- alerting ---
+class AlertChannelCreate(BaseModel):
+    type: Literal["telegram", "email", "webhook"]
+    name: str
+    config: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
+
+
+class AlertChannelRow(BaseModel):
+    id: str
+    type: str
+    name: str
+    # Secret-bearing keys are redacted on read; see alerts router.
+    config: dict[str, Any]
+    enabled: bool
+    created_at: str | None
+
+
+class AlertChannelsList(BaseModel):
+    channels: list[AlertChannelRow]
+
+
+class AlertRuleCreate(BaseModel):
+    name: str
+    min_severity: Severity = "high"
+    on_events: list[Literal["new", "regressed"]] = Field(default_factory=lambda: ["new", "regressed"])
+    channel_id: str
+    enabled: bool = True
+    # Quiet hours (optional): local "HH:MM" bounds in quiet_hours_tz; mode picks
+    # whether matched alerts are held until the window ends or dropped.
+    quiet_hours_start: str | None = None
+    quiet_hours_end: str | None = None
+    quiet_hours_tz: str = "UTC"
+    quiet_hours_mode: Literal["defer", "suppress"] = "defer"
+
+
+class AlertRuleRow(BaseModel):
+    id: str
+    name: str
+    min_severity: str
+    on_events: list[str]
+    channel_id: str
+    channel_name: str
+    enabled: bool
+    quiet_hours_start: str | None = None
+    quiet_hours_end: str | None = None
+    quiet_hours_tz: str = "UTC"
+    quiet_hours_mode: str = "defer"
+    created_at: str | None
+
+
+class AlertRulesList(BaseModel):
+    rules: list[AlertRuleRow]
+
+
+class AlertRow(BaseModel):
+    id: str
+    finding_id: str
+    title: str
+    host: str
+    severity: str
+    event: str
+    status: str
+    error: str | None
+    channel_name: str | None
+    created_at: str | None
+    sent_at: str | None
+
+
+class AlertsList(BaseModel):
+    alerts: list[AlertRow]
+
+
+class ChannelTestResponse(BaseModel):
+    ok: bool
+    error: str | None = None

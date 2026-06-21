@@ -9,11 +9,16 @@ import (
 	"path/filepath"
 )
 
-// Config is the persisted agent identity written after enrollment.
+// Config is the persisted agent identity written after enrollment. The cert
+// fields are populated when the control plane issues a client certificate; they
+// stay empty for agents enrolled before mTLS, which fall back to the secret.
 type Config struct {
-	AgentID     string `json:"agent_id"`
-	AgentSecret string `json:"agent_secret"`
-	Server      string `json:"server"`
+	AgentID       string `json:"agent_id"`
+	AgentSecret   string `json:"agent_secret"`
+	Server        string `json:"server"`
+	ClientCertPEM string `json:"client_cert_pem,omitempty"`
+	ClientKeyPEM  string `json:"client_key_pem,omitempty"`
+	CACertPEM     string `json:"ca_cert_pem,omitempty"`
 }
 
 // Dir returns the palisade home directory, honoring PALISADE_HOME.
@@ -47,7 +52,8 @@ func Load() (*Config, error) {
 	return &c, nil
 }
 
-// Save writes config.json with 0600 perms (it holds the agent secret).
+// Save writes config.json with 0600 perms (it holds the agent secret and,
+// when issued, the mTLS client private key).
 func Save(c *Config) error {
 	if err := os.MkdirAll(Dir(), 0o700); err != nil {
 		return fmt.Errorf("create %s: %w", Dir(), err)

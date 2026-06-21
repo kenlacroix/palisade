@@ -1,17 +1,17 @@
 // Package client is the HTTP client for the Palisade control plane API.
 //
-// Auth for this scaffold is a bearer token (the agent_secret). Production
-// target is mTLS.
-//
-// TODO(mTLS): replace bearer auth with mutual TLS using the client cert
-// issued at enrollment. The enroll flow already maps cleanly: swap the
-// returned agent_secret for a client certificate and configure
-// http.Transport.TLSClientConfig with it.
+// Over plaintext http (the local demo) the agent authenticates with a bearer
+// token (the agent_secret). Over https the agent presents the client
+// certificate issued at enrollment for mutual TLS: the cert+key are loaded into
+// http.Transport.TLSClientConfig and, when a CA PEM is supplied, trusted as the
+// RootCAs pool. The bearer header is still sent; the server prefers the cert.
 package client
 
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,13 +30,44 @@ type Client struct {
 }
 
 // New returns a Client. server is the base URL (scheme+host), secret may be
-// empty for the enroll call.
+// empty for the enroll call. It uses the default transport (no client cert),
+// suitable for the plaintext demo and the enroll call (no cert issued yet).
 func New(server, secret string) *Client {
 	return &Client{
 		BaseURL: strings.TrimRight(server, "/"),
 		Secret:  secret,
 		hc:      &http.Client{Timeout: 30 * time.Second},
 	}
+}
+
+// NewWithCerts returns a Client that presents the enrollment client
+// certificate for mutual TLS when server is an https URL and certPEM+keyPEM are
+// non-empty. caPEM, when present, becomes the RootCAs pool. Over http, or when
+// no cert material is supplied, it behaves exactly like New. It returns an error
+// if the supplied PEM material fails to parse.
+func NewWithCerts(server, secret, certPEM, keyPEM, caPEM string) (*Client, error) {
+	c := New(server, secret)
+	if !strings.HasPrefix(c.BaseURL, "https://") || certPEM == "" || keyPEM == "" {
+		return c, nil
+	}
+
+	cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+	if err != nil {
+		return nil, fmt.Errorf("parse client certificate: %w", err)
+	}
+	tlsCfg := &tls.Config{Certificates: []tls.Certificate{cert}}
+	if caPEM != "" {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM([]byte(caPEM)) {
+			return nil, fmt.Errorf("parse CA certificate: no PEM blocks found")
+		}
+		tlsCfg.RootCAs = pool
+	}
+
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = tlsCfg
+	c.hc.Transport = tr
+	return c, nil
 }
 
 func (c *Client) do(ctx context.Context, method, path string, reqBody, respBody any) error {

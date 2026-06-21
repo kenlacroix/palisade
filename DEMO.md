@@ -1,8 +1,9 @@
-# Palisade M0 — End-to-End Demo
+# Palisade — End-to-End Demo
 
 Runs the full loop on one machine: control plane up, a fake-vulnerable target
-exposed, agent enrolled + running, a real finding produced on-host, then observed
-via the read APIs.
+exposed, agent enrolled + running, a real finding produced on-host, then logged
+in to the multi-tenant read APIs to observe it — plus optional alerting, signed
+bundles, and AI drafting.
 
 The agent discovers services by parsing this host's `/proc/net/tcp{,6}` for
 LISTEN sockets and maps **port 4000 -> service `litellm`**. The control plane
@@ -98,19 +99,33 @@ What happens (watch the log):
 The first scan job is issued on the **second** heartbeat, so allow ~30-60s. To
 skip the wait, leave it running through one tick.
 
-## 5. Terminal D — observe the finding and posture
+## 5. Terminal D — log in, then observe the finding and posture
+
+The UI/BFF read endpoints require a user session (distinct from the agent
+secret). Log in as the seeded demo user and pass the session token as a bearer.
 
 ```bash
 BASE=http://127.0.0.1:8000
 
+# log in (demo user is seeded into the demo org as owner at bootstrap)
+TOKEN=$(curl -s $BASE/v1/auth/login -H 'content-type: application/json' \
+  -d '{"email":"demo@palisade.local","password":"palisade"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+UAUTH="Authorization: Bearer $TOKEN"
+
+# who am I / which org (owner role on org "demo")
+curl -s $BASE/v1/auth/me -H "$UAUTH" | python3 -m json.tool
+
 # assets: the discovered litellm service on :4000 with a critical finding count
-curl -s $BASE/v1/assets | python3 -m json.tool
+curl -s $BASE/v1/assets -H "$UAUTH" | python3 -m json.tool
 
 # the finding (open, critical, CVE-2026-42208)
-curl -s "$BASE/v1/findings?status=open&severity=critical" | python3 -m json.tool
+curl -s "$BASE/v1/findings?status=open&severity=critical" -H "$UAUTH" | python3 -m json.tool
 
-# posture: score drops by the critical weight (20) -> 80, counts.critical == 1
-curl -s $BASE/v1/posture/summary | python3 -m json.tool
+# posture: score drops by the critical weight (20) -> 80, counts.critical == 1.
+# trend30d is real: today's live score plus daily snapshots (older days are
+# reconstructed from finding first_seen/last_seen).
+curl -s $BASE/v1/posture/summary -H "$UAUTH" | python3 -m json.tool
 ```
 
 Expected finding row: `detection_id=litellm-proxy-preauth-sqli`,
@@ -119,24 +134,75 @@ Expected finding row: `detection_id=litellm-proxy-preauth-sqli`,
 
 ## 6. Optional — mute and watch posture recover
 
+Mute requires the `member` role or higher (the demo user is `owner`); reuse the
+`$UAUTH` session bearer from step 5.
+
 ```bash
-BASE=http://127.0.0.1:8000
-FID=$(curl -s "$BASE/v1/findings?status=open" | python3 -c "import sys,json;print(json.load(sys.stdin)['findings'][0]['id'])")
-curl -s -X POST $BASE/v1/findings/$FID/mute -H 'content-type: application/json' \
+FID=$(curl -s "$BASE/v1/findings?status=open" -H "$UAUTH" | python3 -c "import sys,json;print(json.load(sys.stdin)['findings'][0]['id'])")
+curl -s -X POST $BASE/v1/findings/$FID/mute -H "$UAUTH" -H 'content-type: application/json' \
   -d '{"reason":"accepted risk, lab box","ttl_s":3600}' | python3 -m json.tool
-curl -s $BASE/v1/posture/summary | python3 -m json.tool   # score back to 100
+curl -s $BASE/v1/posture/summary -H "$UAUTH" | python3 -m json.tool   # score back to 100
 ```
+
+## 7. Optional — alerting (channel + rule + a delivered alert)
+
+Define a channel and a rule, then make a finding fire it. Rules are evaluated on
+ingest, so the rule must exist **before** the finding is (re)reported. Easiest
+showcase: stand up a local webhook sink, add a webhook channel + a high+ rule,
+then nudge a rescan so the agent re-reports the finding.
+
+Reuse `$BASE` and `$UAUTH` from step 5. Channel/rule mutations require `admin`+.
+Run this before step 6 (muting) so the finding is still active when it
+re-reports — a `new`/`regressed` event fires the rule, a `muted` one does not.
+
+```bash
+# Terminal E — a throwaway webhook sink that prints what it receives
+cat > /tmp/hook.py <<'PY'
+from http.server import BaseHTTPRequestHandler, HTTPServer
+class H(BaseHTTPRequestHandler):
+    def do_POST(self):
+        n = int(self.headers.get("content-length", 0) or 0)
+        print("ALERT:", self.rfile.read(n).decode(), flush=True)
+        self.send_response(200); self.end_headers()
+    def log_message(self, *a): pass
+HTTPServer(("127.0.0.1", 9099), H).serve_forever()
+PY
+python3 /tmp/hook.py &
+
+# create a webhook channel
+CH=$(curl -s -X POST $BASE/v1/alert-channels -H "$UAUTH" -H 'content-type: application/json' \
+  -d '{"type":"webhook","name":"local","config":{"url":"http://127.0.0.1:9099/hook"}}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+
+# optional: test it now (sends a synthetic message) -> {"ok":true,...}
+curl -s -X POST $BASE/v1/alert-channels/$CH/test -H "$UAUTH" | python3 -m json.tool
+
+# rule: fire on any high+ finding that is new or regressed
+curl -s -X POST $BASE/v1/alert-rules -H "$UAUTH" -H 'content-type: application/json' \
+  -d "{\"name\":\"high+\",\"min_severity\":\"high\",\"on_events\":[\"new\",\"regressed\"],\"channel_id\":\"$CH\"}" \
+  | python3 -m json.tool
+
+# nudge a rescan so the next heartbeat re-issues discover/scan and the agent
+# re-reports the litellm finding -> the rule fires -> Terminal E prints ALERT:
+curl -s -X POST $BASE/v1/rescan -H "$UAUTH" | python3 -m json.tool
+
+# after the next agent cycle (~30-60s), the alert history shows the delivery
+curl -s $BASE/v1/alerts -H "$UAUTH" | python3 -m json.tool
+```
+
+In the web UI this is the **Alerts** screen (channels, rules, recent alerts),
+reachable from the sidebar.
 
 ## Cleanup
 
 ```bash
-# Ctrl-C terminals A, B, C
-rm -f /tmp/fake_litellm.py
+# Ctrl-C terminals A, B, C; kill the webhook sink (Terminal E)
+rm -f /tmp/fake_litellm.py /tmp/hook.py
 rm -rf /tmp/palisade-agent
 rm -f /home/ken/Documents/GitHub/palisade/control-plane/palisade.db
 ```
 
-## 7. Optional — signed bundle over an untrusted channel
+## 8. Optional — signed bundle over an untrusted channel
 
 Restart the control plane (Terminal A) with the demo signing key so the catalog
 bundle is Ed25519-signed instead of `"stub"`:
@@ -161,14 +227,15 @@ Tamper test: point the agent at a wrong pubkey and it refuses to scan —
 `PALISADE_CATALOG_PUBKEY=AAAA...` on the agent → `bundle signature verification
 FAILED, refusing to run detections`.
 
-## 8. Optional — draft a detection from a CVE URL and ship it
+## 9. Optional — draft a detection from a CVE URL and ship it
 
 With `ANTHROPIC_API_KEY` set on the control plane, the **Detections** screen's
 **+ New from CVE URL** drafts a detection; **Accept & ship** persists it and
-bumps the catalog version so agents pull it next bundle. Headless equivalent:
+bumps the catalog version so agents pull it next bundle. Headless equivalent
+(accept requires an `admin`+ session bearer; reuse `$UAUTH` from step 5):
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/v1/detections -H 'content-type: application/json' -d '{
+curl -s -X POST http://127.0.0.1:8000/v1/detections -H "$UAUTH" -H 'content-type: application/json' -d '{
   "id":"acme-rce","title":"ACME RCE","cve":"CVE-2026-9999","severity":"high",
   "category":"web","engine":"nuclei","match":{"service":"acme","versions":"<2.0.0"},
   "http":[{"method":"GET","path":"/x","matchers":[{"type":"status","status":[200]}]}],
@@ -182,9 +249,11 @@ curl -s -X POST http://127.0.0.1:8000/v1/detections -H 'content-type: applicatio
   Port 4000 is required for the demo because discover maps 4000 -> `litellm`.
 - The Next.js detection (`nextjs-middleware-bypass`) is `engine: module` and the
   agent logs+skips module detections, so it cannot be demoed end-to-end yet.
-- Auth is a bearer `agent_secret` (mTLS is a documented TODO).
+- Two credentials: agents send a bearer `agent_secret` (mTLS is a documented
+  TODO); the web UI / read APIs require a user **session** bearer from
+  `POST /v1/auth/login` (step 5), org-scoped with owner/admin/member/viewer roles.
 - Catalog bundles are Ed25519-signed when `PALISADE_SIGNING_KEY` is set
-  (step 7); unset → `signature` stays `"stub"` and the agent proceeds in dev
+  (step 8); unset → `signature` stays `"stub"` and the agent proceeds in dev
   mode after a warning.
 - Scan targeting now matches `match.service` **and** `match.versions`, so the
   litellm asset is scanned only when its version is in range (`<1.40.2`).
