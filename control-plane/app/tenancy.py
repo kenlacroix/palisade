@@ -95,7 +95,7 @@ def _set_rls_org(db: Session, org_id: str) -> None:
     # On Postgres, scope RLS to this org for the rest of the request's
     # transaction. No-op on SQLite (RLS is enforced by query filters there).
     if db.bind is not None and db.bind.dialect.name == "postgresql":
-        db.execute(text("SET LOCAL app.current_org_id = :org"), {"org": org_id})
+        db.execute(text("SELECT set_config('app.current_org_id', :org, true)"), {"org": org_id})
 
 
 def current_org(sess: UserSession = Depends(current_session), db: Session = Depends(get_db)) -> Org:

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -31,6 +32,16 @@ var wellKnown = map[int]string{
 // tests.
 var procFiles = []string{"/proc/net/tcp", "/proc/net/tcp6"}
 
+// procSources returns the proc files to parse. PALISADE_PROC_NET overrides the
+// defaults (os.PathListSeparator-separated) so integration tests can drive
+// discovery against a synthetic socket table instead of the live host.
+func procSources() []string {
+	if v := os.Getenv("PALISADE_PROC_NET"); v != "" {
+		return filepath.SplitList(v)
+	}
+	return procFiles
+}
+
 // listener is one parsed LISTEN-state socket.
 type listener struct {
 	ip   net.IP
@@ -45,7 +56,7 @@ func Discover(hostname string, _ *catalog.Scope) ([]catalog.Asset, error) {
 	seen := make(map[int]bool)
 	var assets []catalog.Asset
 
-	for _, f := range procFiles {
+	for _, f := range procSources() {
 		ls, err := parseProcFile(f)
 		if err != nil {
 			if os.IsNotExist(err) {
