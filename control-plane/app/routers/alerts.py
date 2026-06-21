@@ -57,6 +57,10 @@ def _rule_row(r: AlertRule, channel_name: str) -> AlertRuleRow:
         channel_id=r.channel_id,
         channel_name=channel_name,
         enabled=r.enabled,
+        quiet_hours_start=r.quiet_hours_start,
+        quiet_hours_end=r.quiet_hours_end,
+        quiet_hours_tz=r.quiet_hours_tz,
+        quiet_hours_mode=r.quiet_hours_mode,
         created_at=_iso(r.created_at),
     )
 
@@ -226,6 +230,10 @@ def create_rule(
         on_events=body.on_events,
         channel_id=body.channel_id,
         enabled=body.enabled,
+        quiet_hours_start=body.quiet_hours_start,
+        quiet_hours_end=body.quiet_hours_end,
+        quiet_hours_tz=body.quiet_hours_tz,
+        quiet_hours_mode=body.quiet_hours_mode,
     )
     db.add(r)
     db.commit()
@@ -249,6 +257,9 @@ def update_rule(
         r.on_events = body["on_events"]
     if "enabled" in body:
         r.enabled = bool(body["enabled"])
+    for fld in ("quiet_hours_start", "quiet_hours_end", "quiet_hours_tz", "quiet_hours_mode"):
+        if fld in body:
+            setattr(r, fld, body[fld])
     if "channel_id" in body:
         channel = db.get(AlertChannel, body["channel_id"])
         if channel is None or channel.org_id != org.id:

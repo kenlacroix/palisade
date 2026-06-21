@@ -67,6 +67,8 @@ def ingest_findings(
         if f is None:
             continue
         alert_ids.extend(alerting.evaluate_and_enqueue(db, agent.org_id, f, event))
+    # Release any deferred alerts whose quiet window has since closed.
+    alert_ids.extend(alerting.release_due_deferred(db, agent.org_id))
     if alert_ids:
         db.commit()
         queue.enqueue(background, "deliver_alerts", alerting.deliver_pending, alert_ids)

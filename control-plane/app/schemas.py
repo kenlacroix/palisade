@@ -341,6 +341,12 @@ class AlertRuleCreate(BaseModel):
     on_events: list[Literal["new", "regressed"]] = Field(default_factory=lambda: ["new", "regressed"])
     channel_id: str
     enabled: bool = True
+    # Quiet hours (optional): local "HH:MM" bounds in quiet_hours_tz; mode picks
+    # whether matched alerts are held until the window ends or dropped.
+    quiet_hours_start: str | None = None
+    quiet_hours_end: str | None = None
+    quiet_hours_tz: str = "UTC"
+    quiet_hours_mode: Literal["defer", "suppress"] = "defer"
 
 
 class AlertRuleRow(BaseModel):
@@ -351,6 +357,10 @@ class AlertRuleRow(BaseModel):
     channel_id: str
     channel_name: str
     enabled: bool
+    quiet_hours_start: str | None = None
+    quiet_hours_end: str | None = None
+    quiet_hours_tz: str = "UTC"
+    quiet_hours_mode: str = "defer"
     created_at: str | None
 
 

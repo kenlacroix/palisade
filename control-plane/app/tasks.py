@@ -109,6 +109,7 @@ def scan_external_assets(org_id: str) -> None:
             f = db.get(Finding, fid)
             if f is not None:
                 alert_ids.extend(alerting.evaluate_and_enqueue(db, org_id, f, event))
+        alert_ids.extend(alerting.release_due_deferred(db, org_id))
         db.commit()
     except Exception:
         db.rollback()

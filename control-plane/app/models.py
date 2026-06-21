@@ -215,6 +215,13 @@ class AlertRule(Base):
     on_events: Mapped[list] = mapped_column(JSON, default=lambda: ["new", "regressed"])
     channel_id: Mapped[str] = mapped_column(String, ForeignKey("alert_channel.id"))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Quiet hours: when both bounds are set, alerts matched during the window are
+    # held until it ends ("defer") or dropped ("suppress"). Bounds are local
+    # "HH:MM" in quiet_hours_tz (IANA name). Windows may wrap past midnight.
+    quiet_hours_start: Mapped[str | None] = mapped_column(String, nullable=True)
+    quiet_hours_end: Mapped[str | None] = mapped_column(String, nullable=True)
+    quiet_hours_tz: Mapped[str] = mapped_column(String, default="UTC")
+    quiet_hours_mode: Mapped[str] = mapped_column(String, default="defer")  # defer|suppress
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -228,8 +235,11 @@ class Alert(Base):
     channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
     event: Mapped[str] = mapped_column(String, default="new")  # new|regressed
     severity: Mapped[str] = mapped_column(String, default="info")
-    status: Mapped[str] = mapped_column(String, default="pending")  # pending|sent|failed
+    # pending|sent|failed|deferred|suppressed. deferred alerts are released to
+    # pending once deferred_until passes (see alerting.release_due_deferred).
+    status: Mapped[str] = mapped_column(String, default="pending")
     error: Mapped[str | None] = mapped_column(String, nullable=True)
+    deferred_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
