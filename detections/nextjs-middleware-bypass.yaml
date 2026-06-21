@@ -1,0 +1,19 @@
+id: nextjs-middleware-bypass
+title: Next.js middleware authorization bypass
+cve: CVE-2025-29927
+cvss: 9.1
+severity: high
+category: web
+engine: module
+match:
+  service: nextjs
+  versions: ">=11.1.4 <15.2.3"
+spec_ref: modules/nextjs_middleware_bypass
+remediation: |
+  Upgrade Next.js to a patched release (>=15.2.3, or the backported 14.2.25 /
+  13.5.9 / 12.3.5). As mitigation, strip the x-middleware-subrequest header from
+  inbound requests at the edge/proxy so middleware-enforced auth cannot be skipped.
+references:
+  - https://github.com/vercel/next.js/security/advisories/GHSA-f82v-jwr5-mffw
+  - https://nvd.nist.gov/vuln/detail/CVE-2025-29927
+signature: stub

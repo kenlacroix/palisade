@@ -1,0 +1,21 @@
+# Python
+.venv/
+**/__pycache__/
+*.pyc
+control-plane/palisade.db
+*.sqlite
+.env
+
+# Tooling runtime state
+.gstack/
+
+# Node / web
+web/node_modules/
+web/dist/
+
+# Go
+agent/palisade
+agent/.palisade/
+
+# Agent runtime state
+.palisade/

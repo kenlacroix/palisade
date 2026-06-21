@@ -1,0 +1,25 @@
+id: audiobookshelf-authbypass
+title: Audiobookshelf authentication bypass
+cve: CVE-2025-25205
+cvss: 9.1
+severity: critical
+category: self-hosted
+engine: nuclei
+match:
+  service: audiobookshelf
+  versions: "<2.17.0"
+http:
+  - method: GET
+    path: /api/users
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        words: ["\"username\"", "\"isActive\""]
+remediation: |
+  Upgrade Audiobookshelf to >=2.17.0. The /api/users endpoint must require an
+  authenticated admin session; do not expose the instance directly to the internet.
+references:
+  - https://github.com/advplyr/audiobookshelf/security/advisories
+  - https://nvd.nist.gov/vuln/detail/CVE-2025-25205
+signature: stub

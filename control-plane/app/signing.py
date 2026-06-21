@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+import base64
+import hashlib
+
+from . import _ed25519
+from .config import SIGNING_KEY
+
+# Demo keypair (base64-std, raw 32-byte seed / 32-byte public). The agent pins
+# DEMO_PUB_B64; signing with DEMO_SEED_B64 produces bundles it accepts.
+DEMO_SEED_B64 = "70kJtI1NajTd1yQXFHVRuBVQfc6P2CAtRroaLCmYYbY="
+DEMO_PUB_B64 = "DRLpngzapOzExqzZsykc6h8LTpuGjw3ahrGJvnMwFhY="
+
+# Field/record/group/space separators. Must match the Go agent verifier byte
+# for byte — do not "clean up" the canonical encoding.
+US = "\x1f"
+RS = "\x1e"
+GS = "\x1d"
+SP = " "
+
+
+def _matcher_values(matcher: dict) -> str:
+    t = matcher.get("type")
+    if t == "dsl":
+        return ",".join(matcher.get("dsl") or [])
+    if t == "word":
+        return ",".join(matcher.get("words") or [])
+    if t == "status":
+        return ",".join(str(c) for c in (matcher.get("status") or []))
+    return ""
+
+
+def _http_field(det: dict) -> str:
+    if det.get("engine") != "nuclei" or not det.get("http"):
+        return ""
+    steps: list[str] = []
+    for step in det["http"]:
+        method = step.get("method", "")
+        path = step.get("path", "")
+        body = step.get("body") or ""
+        matchers = GS.join(
+            (m.get("type", "") + ":" + _matcher_values(m)) for m in (step.get("matchers") or [])
+        )
+        steps.append(method + SP + path + SP + body + SP + matchers)
+    return RS.join(steps)
+
+
+def _canonical(det: dict) -> str:
+    cve = det.get("cve") or ""
+    spec_ref = det.get("spec_ref") or ""
+    match = det.get("match") or {}
+    return US.join(
+        [
+            det["id"],
+            cve,
+            det["severity"],
+            det["category"],
+            det["engine"],
+            match.get("service", ""),
+            match.get("versions", ""),
+            spec_ref,
+            det["remediation"],
+            _http_field(det),
+        ]
+    )
+
+
+def _hash(det: dict) -> str:
+    return hashlib.sha256(_canonical(det).encode("utf-8")).hexdigest()
+
+
+def build_manifest(version: int, detections: list[dict]) -> bytes:
+    hashes = [_hash(d) for d in sorted(detections, key=lambda x: x["id"])]
+    return ("palisade-catalog-v1\n" + str(version) + "\n" + "\n".join(hashes)).encode("utf-8")
+
+
+def sign_bundle(version: int, detections: list[dict]) -> str:
+    if not SIGNING_KEY:
+        return "stub"
+    seed = base64.b64decode(SIGNING_KEY)
+    sig = _ed25519.sign(build_manifest(version, detections), seed)
+    return base64.b64encode(sig).decode()
+
+
+def verify_bundle(version: int, detections: list[dict], signature_b64: str, pub_b64: str) -> bool:
+    if signature_b64 in ("", "stub"):
+        return False
+    try:
+        sig = base64.b64decode(signature_b64)
+        pub = base64.b64decode(pub_b64)
+        return _ed25519.verify(build_manifest(version, detections), sig, pub)
+    except Exception:
+        return False
