@@ -82,6 +82,8 @@ def _normalize(raw: dict[str, Any]) -> dict[str, Any]:
     }
     if out["engine"] == "module":
         out["spec_ref"] = raw.get("spec_ref", "")
+        if raw.get("flow"):
+            out["flow"] = raw["flow"]
     else:
         out["http"] = raw.get("http", [])
     return out

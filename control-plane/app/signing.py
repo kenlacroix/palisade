@@ -63,6 +63,31 @@ def _http_field(det: dict) -> str:
     return RS.join(steps)
 
 
+def _flow_field(det: dict) -> str:
+    # Canonical segment for a declarative module flow. Every byte must match the
+    # Go verifier's flowString:
+    #   "flow" US <requests joined by RS> US <confirm exprs joined by GS>
+    # where each request is: id SP method SP path SP body SP <headers>, headers
+    # being "k=v" pairs sorted lexicographically and joined by ",".
+    flow = det.get("flow") or {}
+    reqs: list[str] = []
+    for r in flow.get("requests") or []:
+        headers = r.get("headers") or {}
+        hdrs = ",".join(sorted(f"{k}={v}" for k, v in headers.items()))
+        reqs.append(
+            SP.join([r.get("id", ""), r.get("method", ""), r.get("path", ""), r.get("body") or "", hdrs])
+        )
+    return "flow" + US + RS.join(reqs) + US + GS.join(flow.get("confirm") or [])
+
+
+def _engine_body(det: dict) -> str:
+    # Last canonical field: nuclei http steps, or a module's declarative flow.
+    # A spec_ref-only module has no body, so it hashes exactly as before.
+    if det.get("engine") == "module" and det.get("flow"):
+        return _flow_field(det)
+    return _http_field(det)
+
+
 def _canonical(det: dict) -> str:
     cve = det.get("cve") or ""
     spec_ref = det.get("spec_ref") or ""
@@ -78,7 +103,7 @@ def _canonical(det: dict) -> str:
             match.get("versions", ""),
             spec_ref,
             det["remediation"],
-            _http_field(det),
+            _engine_body(det),
         ]
     )
 

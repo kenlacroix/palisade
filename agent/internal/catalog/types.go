@@ -112,10 +112,30 @@ type Detection struct {
 	Engine      string     `json:"engine"`   // nuclei|module
 	Match       Match      `json:"match"`
 	HTTP        []HTTPStep `json:"http,omitempty"`     // when engine=nuclei
-	SpecRef     string     `json:"spec_ref,omitempty"` // when engine=module
+	SpecRef     string     `json:"spec_ref,omitempty"` // when engine=module (compiled)
+	Flow        *Flow      `json:"flow,omitempty"`     // when engine=module (declarative)
 	Remediation string     `json:"remediation"`
 	References  []string   `json:"references"`
 	Signature   string     `json:"signature"`
+}
+
+// Flow is a declarative multi-step module detection shipped in the signed
+// bundle (approach B): the agent sends each request, captures the responses,
+// then requires every confirm expression to hold. No code executes — the agent
+// only interprets data — so the trust boundary stays the signed catalog.
+type Flow struct {
+	Requests []FlowRequest `json:"requests"`
+	Confirm  []string      `json:"confirm"`
+}
+
+// FlowRequest is one HTTP request in a flow, addressable by ID from confirm
+// expressions (e.g. status(baseline)).
+type FlowRequest struct {
+	ID      string            `json:"id"`
+	Method  string            `json:"method"`
+	Path    string            `json:"path"`
+	Body    string            `json:"body,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 // Match selects which assets a detection applies to.

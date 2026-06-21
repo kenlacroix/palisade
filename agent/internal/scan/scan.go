@@ -59,16 +59,22 @@ func (s *Scanner) RunTarget(ctx context.Context, base string, t catalog.ScanTarg
 			continue
 		}
 		if det.Engine == "module" {
-			// Module detections run compiled multi-step logic referenced by
-			// spec_ref. The module ships in this binary, not the catalog.
-			mod, ok := lookupModule(det.SpecRef)
-			if !ok {
-				log.Printf("scan: detection %q references module %q which is not registered, skipping", det.ID, det.SpecRef)
+			// Compiled modules win: multi-step logic referenced by spec_ref ships
+			// in this binary. Falling back, a declarative flow (approach B) ships
+			// in the signed catalog and is interpreted on-host — no rebuild.
+			if mod, ok := lookupModule(det.SpecRef); ok {
+				if f, ok := mod.Run(ctx, ModuleEnv{Base: base, AssetID: t.AssetID, Det: det, HC: s.hc}); ok {
+					out = append(out, f)
+				}
 				continue
 			}
-			if f, ok := mod.Run(ctx, ModuleEnv{Base: base, AssetID: t.AssetID, Det: det, HC: s.hc}); ok {
-				out = append(out, f)
+			if det.Flow != nil {
+				if f, ok := runFlow(ctx, base, t.AssetID, det, s.hc); ok {
+					out = append(out, f)
+				}
+				continue
 			}
+			log.Printf("scan: detection %q references module %q which is not registered and has no flow, skipping", det.ID, det.SpecRef)
 			continue
 		}
 		if f, ok := s.runNuclei(ctx, base, t.AssetID, det); ok {

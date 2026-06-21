@@ -82,6 +82,8 @@ class Detection(BaseModel):
     match: DetectionMatch
     http: list[dict[str, Any]] | None = None
     spec_ref: str | None = None
+    # Declarative module flow (approach B), shipped in the signed bundle.
+    flow: dict[str, Any] | None = None
     remediation: str
     references: list[str]
     signature: str

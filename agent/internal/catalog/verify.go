@@ -41,8 +41,55 @@ func detectionString(d Detection) []byte {
 	writeField(d.Match.Versions, false)
 	writeField(d.SpecRef, false)
 	writeField(d.Remediation, false)
-	writeField(httpString(d), false)
+	writeField(engineBody(d), false)
 	return b.Bytes()
+}
+
+// engineBody is the last canonical field: the nuclei http steps, or a module's
+// declarative flow. A spec_ref-only (compiled) module has no body, so it hashes
+// exactly as before — the flow segment is emitted only when a flow is present.
+func engineBody(d Detection) string {
+	if d.Engine == "module" && d.Flow != nil {
+		return flowString(d)
+	}
+	return httpString(d)
+}
+
+// flowString builds the canonical segment for a declarative flow. Layout (every
+// byte must match control-plane signing.py _flow_field):
+//
+//	"flow" US <requests joined by RS> US <confirm exprs joined by GS>
+//
+// where each request is: id SP method SP path SP body SP <headers>, and headers
+// are "k=v" pairs sorted lexicographically and joined by ",".
+func flowString(d Detection) string {
+	f := d.Flow
+	reqs := make([]string, 0, len(f.Requests))
+	for _, r := range f.Requests {
+		hdrs := make([]string, 0, len(r.Headers))
+		for k, v := range r.Headers {
+			hdrs = append(hdrs, k+"="+v)
+		}
+		sort.Strings(hdrs)
+		var sb strings.Builder
+		sb.WriteString(r.ID)
+		sb.WriteByte(sepSP)
+		sb.WriteString(r.Method)
+		sb.WriteByte(sepSP)
+		sb.WriteString(r.Path)
+		sb.WriteByte(sepSP)
+		sb.WriteString(r.Body)
+		sb.WriteByte(sepSP)
+		sb.WriteString(strings.Join(hdrs, ","))
+		reqs = append(reqs, sb.String())
+	}
+	var b strings.Builder
+	b.WriteString("flow")
+	b.WriteByte(sepUS)
+	b.WriteString(strings.Join(reqs, string(rune(sepRS))))
+	b.WriteByte(sepUS)
+	b.WriteString(strings.Join(f.Confirm, string(rune(sepGS))))
+	return b.String()
 }
 
 // httpString builds the canonical HTTP segment for a detection.
