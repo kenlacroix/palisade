@@ -8,6 +8,11 @@ from pathlib import Path
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./palisade.db")
 
+# Durable job queue (Arq + Redis). Unset -> triage/alert delivery fall back to
+# in-process FastAPI BackgroundTasks (the dev/SQLite path; no Redis required).
+# Set in production so background work survives restarts and the API can scale.
+REDIS_URL = os.environ.get("REDIS_URL", "")
+
 # Detections are seeded from this dir at startup; falls back to inline seeds in
 # catalog.py if the dir is absent. Default resolves to the repo's detections/.
 _DEFAULT_DETECTIONS = Path(__file__).resolve().parents[2] / "detections"

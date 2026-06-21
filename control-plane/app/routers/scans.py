@@ -6,50 +6,18 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Path, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import alerting, config
+from .. import alerting, config, queue
 from ..auth import require_agent
-from ..db import SessionLocal, get_db
-from ..models import Agent, Asset, Detection, Finding
+from ..db import get_db
+from ..models import Agent, Detection, Finding
 from ..schemas import FindingsRequest
-from ..triage import triage_finding
+from ..tasks import triage_findings
 
 router = APIRouter(prefix="/v1/scans", tags=["scans"])
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def _triage_findings(finding_ids: list[str]) -> None:
-    """Background AI triage off the request path. Own session; never raises."""
-    db = SessionLocal()
-    try:
-        for fid in finding_ids:
-            try:
-                f = db.get(Finding, fid)
-                if f is None:
-                    continue
-                det = db.get(Detection, f.detection_id)
-                asset = db.get(Asset, f.asset_id)
-                evidence = f.evidence if isinstance(f.evidence, dict) else {}
-                result = triage_finding(
-                    title=det.title if det else f.detection_id,
-                    severity=f.severity,
-                    cve=det.cve if det else None,
-                    cvss=det.cvss if det else None,
-                    host=asset.host if asset else "",
-                    service=asset.service if asset else "",
-                    evidence_note=str(evidence.get("note", "")),
-                )
-                if result:
-                    f.triage_priority = result["triage_priority"]
-                    f.triage_score = result["triage_score"]
-                    f.triage_rationale = result["triage_rationale"]
-                    db.commit()
-            except Exception:
-                db.rollback()
-    finally:
-        db.close()
 
 
 @router.post("/{scan_id}/findings", status_code=202)
@@ -122,7 +90,7 @@ def ingest_findings(
 
     # Offload AI triage so it never blocks the request. No-op without a key.
     if config.ANTHROPIC_API_KEY and new_finding_ids:
-        background.add_task(_triage_findings, new_finding_ids)
+        queue.enqueue(background, "triage_findings", triage_findings, new_finding_ids)
 
     # Evaluate alert rules and enqueue, then deliver in the background.
     alert_ids: list[str] = []
@@ -133,6 +101,6 @@ def ingest_findings(
         alert_ids.extend(alerting.evaluate_and_enqueue(db, agent.org_id, f, event))
     if alert_ids:
         db.commit()
-        background.add_task(alerting.deliver_pending, alert_ids)
+        queue.enqueue(background, "deliver_alerts", alerting.deliver_pending, alert_ids)
 
     return Response(status_code=202)

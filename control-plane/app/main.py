@@ -11,6 +11,7 @@ from .catalog import seed_detections
 from .config import cors_origins
 from .db import SessionLocal, init_db
 from .models import DEMO_ORG_ID, EnrollToken, Membership, Org, User
+from .queue import close_pool, init_pool
 from .routers import agents, alerts, auth_routes, catalog, detections, read, scans
 from .tenancy import hash_password
 
@@ -60,7 +61,11 @@ def _bootstrap() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _bootstrap()
-    yield
+    await init_pool()
+    try:
+        yield
+    finally:
+        await close_pool()
 
 
 app = FastAPI(title="Palisade Control Plane", version="0.1.0", lifespan=lifespan)
