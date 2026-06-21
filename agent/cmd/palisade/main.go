@@ -277,8 +277,8 @@ func (a *agent) runScan(ctx context.Context, job catalog.Job) {
 
 	var findings []catalog.FindingReport
 	for _, t := range job.Payload.Targets {
-		base := a.baseURLFor(t.AssetID, addrByAsset, hostname)
-		fs := a.scanner.RunTarget(ctx, base, t, byID)
+		authority := a.authorityFor(t.AssetID, addrByAsset, hostname)
+		fs := a.scanner.RunTarget(ctx, authority, t, byID)
 		for _, f := range fs {
 			findings = append(findings, catalog.FindingReport{
 				DetectionID: f.DetectionID,
@@ -304,15 +304,13 @@ func (a *agent) runScan(ctx context.Context, job catalog.Job) {
 	log.Printf("scan %s: %d finding(s) reported", job.JobID, len(findings))
 }
 
-// baseURLFor builds the target base URL for an asset. If we know the
+// authorityFor builds the bare authority for an asset. If we know the
 // "<host>:<port>" from a prior discover, use it; otherwise fall back to the
 // local hostname (the scan target is always on this host for the on-host
-// model).
-func (a *agent) baseURLFor(assetID string, addrByAsset map[string]string, hostname string) string {
+// model). The scheme is applied per-detection in scan.RunTarget.
+func (a *agent) authorityFor(assetID string, addrByAsset map[string]string, hostname string) string {
 	if hp, ok := addrByAsset[assetID]; ok {
-		// Detections probe over HTTP. TODO: honor TLS / scheme hints from the
-		// asset record once the contract carries them.
-		return "http://" + hp
+		return hp
 	}
-	return "http://" + hostname
+	return hostname
 }

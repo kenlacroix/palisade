@@ -79,6 +79,7 @@ class Detection(BaseModel):
     severity: Severity
     category: Literal["ai-infra", "self-hosted", "web", "backup", "observability"]
     engine: Literal["nuclei", "module"]
+    scheme: Literal["http", "https"] | None = None
     match: DetectionMatch
     http: list[dict[str, Any]] | None = None
     spec_ref: str | None = None

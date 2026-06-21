@@ -48,9 +48,10 @@ func Fingerprint(assetID, detectionID, evidenceKey string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// RunTarget evaluates every detection in a target against the asset at base
-// (e.g. "http://host:port") and returns matched findings.
-func (s *Scanner) RunTarget(ctx context.Context, base string, t catalog.ScanTarget, byID map[string]catalog.Detection) []Finding {
+// RunTarget evaluates every detection in a target against the asset at the
+// bare authority (e.g. "host:port"). The probe scheme is resolved per detection
+// (see schemeFor) and the full base URL is built before each engine path runs.
+func (s *Scanner) RunTarget(ctx context.Context, authority string, t catalog.ScanTarget, byID map[string]catalog.Detection) []Finding {
 	var out []Finding
 	for _, did := range t.DetectionIDs {
 		det, ok := byID[did]
@@ -58,6 +59,7 @@ func (s *Scanner) RunTarget(ctx context.Context, base string, t catalog.ScanTarg
 			log.Printf("scan: detection %q not in bundle, skipping", did)
 			continue
 		}
+		base := schemeFor(det.Scheme, authority)
 		if det.Engine == "module" {
 			// Compiled modules win: multi-step logic referenced by spec_ref ships
 			// in this binary. Falling back, a declarative flow (approach B) ships
@@ -82,6 +84,30 @@ func (s *Scanner) RunTarget(ctx context.Context, base string, t catalog.ScanTarg
 		}
 	}
 	return out
+}
+
+// schemeFor builds the full base URL for an authority ("host:port" or "host"),
+// resolving the scheme: an explicit detection scheme wins; otherwise well-known
+// TLS ports (443, 8443) imply https; everything else defaults to http.
+func schemeFor(detScheme, authority string) string {
+	scheme := detScheme
+	if scheme == "" {
+		switch portOf(authority) {
+		case "443", "8443":
+			scheme = "https"
+		default:
+			scheme = "http"
+		}
+	}
+	return scheme + "://" + authority
+}
+
+// portOf returns the port of a "host:port" authority, or "" when absent.
+func portOf(authority string) string {
+	if i := strings.LastIndex(authority, ":"); i >= 0 {
+		return authority[i+1:]
+	}
+	return ""
 }
 
 // runNuclei runs the http steps of a nuclei-engine detection. On the first

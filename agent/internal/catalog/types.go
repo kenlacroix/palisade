@@ -107,9 +107,10 @@ type Detection struct {
 	ID          string     `json:"id"`
 	Title       string     `json:"title"`
 	CVE         string     `json:"cve"`
-	Severity    string     `json:"severity"` // critical|high|medium|low|info
-	Category    string     `json:"category"` // ai-infra|self-hosted|web|backup|observability
-	Engine      string     `json:"engine"`   // nuclei|module
+	Severity    string     `json:"severity"`         // critical|high|medium|low|info
+	Category    string     `json:"category"`         // ai-infra|self-hosted|web|backup|observability
+	Engine      string     `json:"engine"`           // nuclei|module
+	Scheme      string     `json:"scheme,omitempty"` // http|https; overrides port inference
 	Match       Match      `json:"match"`
 	HTTP        []HTTPStep `json:"http,omitempty"`     // when engine=nuclei
 	SpecRef     string     `json:"spec_ref,omitempty"` // when engine=module (compiled)
