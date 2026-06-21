@@ -79,6 +79,21 @@ PERIMETER_MIN_INTERVAL_S = float(os.environ.get("PALISADE_PERIMETER_MIN_INTERVAL
 PERIMETER_MAX_REQUESTS_PER_SCAN = int(os.environ.get("PALISADE_PERIMETER_MAX_REQUESTS_PER_SCAN", "500"))
 
 
+# --- cron scheduler (SPEC §177) ---
+# Cadence knobs for the Arq worker's cron jobs (app/scheduler.py). These only
+# take effect when REDIS_URL is set and the Arq worker runs; the dev/SQLite
+# in-process fallback has no scheduler.
+# SCAN_EVERY_HOURS: perimeter scan fires at minute 0 of every Nth hour
+#   (1..24; clamped). DEFERRED_RELEASE_EVERY_MIN: quiet-hours deferred-alert
+#   release cadence in minutes (1..60; clamped, must divide an hour cleanly for
+#   even spacing — non-divisors are accepted and arq fires on the matching
+#   minutes-of-hour set). SNAPSHOT_UTC_HOUR: hour (0..23, UTC) the daily posture
+#   snapshot runs.
+SCAN_EVERY_HOURS = max(1, min(24, int(os.environ.get("PALISADE_SCAN_EVERY_HOURS", "6"))))
+DEFERRED_RELEASE_EVERY_MIN = max(1, min(60, int(os.environ.get("PALISADE_DEFERRED_RELEASE_EVERY_MIN", "5"))))
+SNAPSHOT_UTC_HOUR = max(0, min(23, int(os.environ.get("PALISADE_SNAPSHOT_UTC_HOUR", "0"))))
+
+
 def perimeter_scope_allowlist() -> list[str]:
     # Comma-separated hosts / domain suffixes / CIDRs the operator confirms are
     # in scope. EMPTY (default) = allow-all with a warning: dev and the existing
