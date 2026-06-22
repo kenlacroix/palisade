@@ -102,9 +102,9 @@ func TestEvalConfirmForms(t *testing.T) {
 		{`contains(body(a), "absent")`, false},
 		{`regex("h.llo", body(a))`, true},
 		{`contains(header(a), "yes")`, true},
-		{"status(missing) == 200", false},   // unknown id -> fail closed
-		{"bogus(a) == 1", false},            // unsupported lhs -> fail closed
-		{"status(a) ~= 200", false},         // bad operator -> fail closed
+		{"status(missing) == 200", false}, // unknown id -> fail closed
+		{"bogus(a) == 1", false},          // unsupported lhs -> fail closed
+		{"status(a) ~= 200", false},       // bad operator -> fail closed
 	}
 	for _, c := range cases {
 		if got := evalConfirm(c.expr, results); got != c.want {
