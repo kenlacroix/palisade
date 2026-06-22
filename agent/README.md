@@ -86,8 +86,10 @@ For `engine: nuclei` detections the agent evaluates these matcher types
 - **`word`** — response body contains **all** listed words.
 - **`status`** — response status code is in the list.
 
-`engine: module` detections are skipped with a logged note (not yet
-implemented).
+`engine: module` detections run a compiled module when one is registered for
+the detection's `spec_ref` (e.g. the Next.js middleware bypass), otherwise they
+interpret the declarative `flow` shipped in the signed catalog. A module with
+neither is skipped with a logged note.
 
 ## Auth
 
@@ -129,9 +131,6 @@ The evidence key is the first matched matcher's key, e.g. `dsl:duration>=5`,
 
 ## TODO
 
-- [ ] Real minisign verification of catalog bundles before execution
-      (`cmd/palisade`, `runScan`).
-- [ ] `engine: module` execution (`internal/scan`).
 - [ ] Subnet sweep for discover jobs with a `scope` (currently on-host
       `/proc` enumeration only).
 - [ ] Full nuclei DSL beyond duration comparisons (`internal/scan`).

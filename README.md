@@ -275,6 +275,11 @@ per-org wrapped data key, migration 0005), and **per-rule alert quiet hours**
 built (see `SPEC.md`): the production ops layer — IaC, a live deploy, public
 status page, observability dashboards, and runbooks.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, `make lint` / `make test`,
+and the PR flow. Release history is in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 [Apache License 2.0](LICENSE) — © 2026 Kenneth Lacroix.
