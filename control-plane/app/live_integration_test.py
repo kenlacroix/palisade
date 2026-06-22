@@ -139,6 +139,11 @@ def test_live_agent_control_plane():
             **os.environ,
             "DATABASE_URL": os.environ.get("PALISADE_TEST_DATABASE_URL", f"sqlite:///{db_path}"),
             "PALISADE_ENROLL_TOKENS": ENROLL_TOKEN,
+            # This loop uses the public default creds and the bearer agent path.
+            # On the Postgres leg that counts as "production", so opt into insecure
+            # defaults explicitly: keeps the startup preflight to warnings and the
+            # bearer fallback enabled (mTLS-required would reject the agent).
+            "PALISADE_ALLOW_INSECURE_DEFAULTS": "1",
         }
         procs.append(subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "app.main:app",

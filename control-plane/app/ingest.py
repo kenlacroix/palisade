@@ -44,8 +44,14 @@ def ingest_reports(
         det = db.get(Detection, r.detection_id)
         severity = r.severity or (det.severity if det else "info")
 
+        # Dedupe within the org only. A bare fingerprint match would let a
+        # report collide with — and overwrite — another tenant's finding that
+        # happens to share a fingerprint (now also blocked at the DB by the
+        # per-org unique index, migration 0011).
         existing = db.execute(
-            select(Finding).where(Finding.fingerprint == r.fingerprint)
+            select(Finding).where(
+                Finding.org_id == org_id, Finding.fingerprint == r.fingerprint
+            )
         ).scalar_one_or_none()
 
         evidence_json, evidence_enc = encryption.seal(db, org_id, r.evidence)

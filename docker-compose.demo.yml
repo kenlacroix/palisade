@@ -53,6 +53,11 @@ services:
       DATABASE_URL: postgresql+psycopg://palisade:palisade@postgres:5432/palisade
       REDIS_URL: redis://redis:6379
       PALISADE_AUTO_MIGRATE: "0"
+      # The public demo deliberately runs on default creds + the demo signing
+      # key, so opt into insecure defaults (the startup preflight would otherwise
+      # refuse to boot a Postgres deployment with these). NEVER set this on a
+      # real, internet-exposed deployment.
+      PALISADE_ALLOW_INSECURE_DEFAULTS: "1"
       # Demo wiring (env contract implemented by the control plane):
       PALISADE_SEED_DEMO: "1"          # pre-populate the demo org with sample data
       PALISADE_ENROLL_TOKENS: "PLS-DEMO" # single-use enroll token for the agent

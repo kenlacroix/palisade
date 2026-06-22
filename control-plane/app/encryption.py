@@ -78,3 +78,30 @@ def open_evidence(db: Session, finding: Finding) -> dict:
         return json.loads(_open_bytes(bytes(blob), dek).decode())
     except Exception:
         return finding.evidence or {}
+
+
+# Standalone secret sealing for single, non-per-org secrets (e.g. the platform
+# CA private key) stored in a String column. Stored form is a tagged string:
+#   "enc:v1:" + base64(nonce || AES-256-GCM ciphertext) sealed directly under
+# the master KEK. With no KEK configured the plaintext is returned unchanged so
+# the column holds legacy plaintext. open_secret accepts either form, so values
+# written before a KEK existed keep working.
+_SECRET_PREFIX = "enc:v1:"
+
+
+def seal_secret(plaintext: bytes) -> str:
+    """Seal a secret for storage in a String column. Pass-through (decoded as
+    text) when no KEK is configured; otherwise an "enc:v1:" tagged base64 blob."""
+    if not enabled():
+        return plaintext.decode()
+    blob = _seal_bytes(plaintext, _kek())
+    return _SECRET_PREFIX + base64.b64encode(blob).decode()
+
+
+def open_secret(stored: str) -> bytes:
+    """Recover a secret sealed by seal_secret. An "enc:v1:" tagged value is
+    decrypted under the KEK; any other value is treated as legacy plaintext."""
+    if not stored.startswith(_SECRET_PREFIX):
+        return stored.encode()
+    blob = base64.b64decode(stored[len(_SECRET_PREFIX) :])
+    return _open_bytes(blob, _kek())

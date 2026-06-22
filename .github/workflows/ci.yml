@@ -46,6 +46,19 @@ jobs:
         run: pip install -r requirements.txt
       - name: Smoke test (SQLite, in-process)
         run: python -m app.smoke_test
+      # Unit/API suites (pytest). Run each file in its OWN process: several test
+      # modules rebind the module-global db engine + config at import, so a single
+      # pooled `pytest app` invocation cross-contaminates. Per-file processes
+      # isolate them. live_integration / rls_postgres / smoke have their own jobs.
+      - name: Unit tests (pytest, isolated per file)
+        run: |
+          for f in app/*_test.py; do
+            case "$f" in
+              app/live_integration_test.py|app/rls_postgres_test.py|app/smoke_test.py) continue ;;
+            esac
+            echo "== $f =="
+            python -m pytest "$f" -q || exit 1
+          done
       - name: Migrations apply cleanly
         env:
           DATABASE_URL: sqlite:///./ci_alembic.db
@@ -118,6 +131,12 @@ jobs:
         env:
           PALISADE_TEST_DATABASE_URL: postgresql+psycopg://palisade:palisade@localhost:5432/palisade
         run: python -m app.live_integration_test
+      # Proves FORCE ROW LEVEL SECURITY (migration 0011) actually isolates the
+      # app's own DB role across orgs -- the regression this branch fixes.
+      - name: RLS enforcement (Postgres)
+        env:
+          PALISADE_TEST_DATABASE_URL: postgresql+psycopg://palisade:palisade@localhost:5432/palisade
+        run: python -m app.rls_postgres_test
 
   detections:
     name: Detections (validate)

@@ -21,6 +21,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from sqlalchemy.orm import Session
 
 from . import config
+from .encryption import open_secret, seal_secret
 from .models import CertAuthority
 
 CA_ID = "default"
@@ -74,11 +75,15 @@ def ensure_ca(db: Session) -> CertAuthority:
     ca = CertAuthority(
         id=CA_ID,
         cert_pem=cert.public_bytes(serialization.Encoding.PEM).decode(),
-        key_pem=key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
-        ).decode(),
+        # Sealed at rest under the master KEK when one is configured; legacy
+        # deployments without a KEK store the PEM verbatim (transparent fallback).
+        key_pem=seal_secret(
+            key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption(),
+            )
+        ),
     )
     db.add(ca)
     db.commit()
@@ -89,7 +94,7 @@ def issue_client_cert(db: Session, agent_id: str, org_id: str) -> dict:
     """Mint an EC P-256 client cert for an agent, signed by the platform CA."""
     ca = ensure_ca(db)
     ca_cert = x509.load_pem_x509_certificate(ca.cert_pem.encode())
-    ca_key = serialization.load_pem_private_key(ca.key_pem.encode(), password=None)
+    ca_key = serialization.load_pem_private_key(open_secret(ca.key_pem), password=None)
 
     key = ec.generate_private_key(ec.SECP256R1())
     now = _now()

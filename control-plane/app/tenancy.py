@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Cookie, Depends, Header, HTTPException, Request
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -24,6 +25,9 @@ from .models import DEMO_ORG_ID, ROLES, Membership, Org, User, UserSession
 
 _PBKDF2_ITERATIONS = 240_000
 _MUTATING_METHODS = ("POST", "PATCH", "PUT", "DELETE")
+# Postgres role identifiers we'll inject into SET LOCAL ROLE must be plain
+# identifiers (no quoting/injection); anything else is ignored.
+_ROLE_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 # --- password hashing (stdlib pbkdf2, no extra deps) ---
@@ -63,17 +67,22 @@ def create_session(db: Session, user: User, org_id: str) -> UserSession:
     return sess
 
 
-def _bearer_token(authorization: str | None) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="missing bearer token")
-    return authorization.split(" ", 1)[1].strip()
+def _bearer_token(authorization: str | None, cookie: str | None) -> str:
+    # Header takes precedence; fall back to the httpOnly session cookie so the
+    # web UI no longer needs JS-readable token storage.
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization.split(" ", 1)[1].strip()
+    if cookie:
+        return cookie
+    raise HTTPException(status_code=401, detail="missing bearer token")
 
 
 def current_session(
     authorization: str | None = Header(default=None),
+    palisade_session: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ) -> UserSession:
-    token = _bearer_token(authorization)
+    token = _bearer_token(authorization, palisade_session)
     sess = db.get(UserSession, token)
     if sess is None:
         raise HTTPException(status_code=401, detail="invalid session")
@@ -95,8 +104,16 @@ def current_user(sess: UserSession = Depends(current_session), db: Session = Dep
 def _set_rls_org(db: Session, org_id: str) -> None:
     # On Postgres, scope RLS to this org for the rest of the request's
     # transaction. No-op on SQLite (RLS is enforced by query filters there).
-    if db.bind is not None and db.bind.dialect.name == "postgresql":
-        db.execute(text("SELECT set_config('app.current_org_id', :org, true)"), {"org": org_id})
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        return
+    # Drop to the non-superuser app role (migration 0012) for this transaction
+    # so RLS actually binds — the connecting role is usually the superuser/owner,
+    # which RLS (even FORCEd) does not constrain. SET LOCAL resets at commit, so
+    # this is re-applied per transaction alongside the org GUC.
+    role = config.db_app_role()
+    if role and _ROLE_IDENT.match(role):
+        db.execute(text(f"SET LOCAL ROLE {role}"))
+    db.execute(text("SELECT set_config('app.current_org_id', :org, true)"), {"org": org_id})
 
 
 def current_org(

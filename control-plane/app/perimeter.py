@@ -90,12 +90,14 @@ def _host_of(base: str) -> str:
 
 
 def host_in_scope(host: str) -> bool:
-    """True when host is operator-confirmed in scope. Empty allowlist => True
-    (allow-all, dev/back-compat) — callers should heed the warning logged below.
-    Otherwise match by exact host, parent-domain suffix, or CIDR membership."""
+    """True when host is operator-confirmed in scope. An empty allowlist is
+    deny-all in production (config.is_production()) so a misconfigured prod never
+    probes an unconfirmed target, and allow-all for dev/demo so the SQLite path
+    and the existing back-compat flow keep working. With entries, match by exact
+    host, parent-domain suffix, or CIDR membership."""
     allow = config.perimeter_scope_allowlist()
     if not allow:
-        return True
+        return not config.is_production()
     host = (host or "").strip().lower()
     try:
         ip = ipaddress.ip_address(host)
@@ -133,7 +135,7 @@ def run_detection(
         log.warning("perimeter: skipping out-of-scope target %s", host)
         return None
     if not config.perimeter_scope_allowlist():
-        log.warning("perimeter: empty scope allowlist — probing %s (allow-all)", host)
+        log.warning("perimeter: empty scope allowlist (dev allow-all) — probing %s", host)
     limiter = limiter or _LIMITER
     for step in spec.get("http") or []:
         method = (step.get("method") or "GET").upper()

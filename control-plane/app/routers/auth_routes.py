@@ -25,6 +25,20 @@ from ..tenancy import (
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
+SESSION_COOKIE = "palisade_session"
+
+
+def _set_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=config.SESSION_TTL_S,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+
 
 def _memberships(db: Session, user_id: str) -> list[MembershipRow]:
     rows = db.execute(
@@ -47,7 +61,7 @@ def _role_for(db: Session, user_id: str, org_id: str) -> str:
 
 
 @router.post("/login", response_model=SessionInfo)
-def login(body: LoginRequest, db: Session = Depends(get_db)) -> SessionInfo:
+def login(body: LoginRequest, response: Response, db: Session = Depends(get_db)) -> SessionInfo:
     user = db.execute(select(User).where(User.email == body.email)).scalar_one_or_none()
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="invalid email or password")
@@ -63,6 +77,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> SessionInfo:
     _set_rls_org(db, active.org_id)
     audit.record(db, org_id=active.org_id, actor=user.email, action="session.create", target=active.org_name)
     db.commit()
+    _set_session_cookie(response, sess.token)
     return SessionInfo(
         token=sess.token,
         user=UserInfo(id=user.id, email=user.email, name=user.name),
@@ -80,7 +95,9 @@ def logout(
 ) -> Response:
     db.delete(sess)
     db.commit()
-    return Response(status_code=204)
+    resp = Response(status_code=204)
+    resp.delete_cookie(SESSION_COOKIE, path="/")
+    return resp
 
 
 @router.get("/me", response_model=MeResponse)

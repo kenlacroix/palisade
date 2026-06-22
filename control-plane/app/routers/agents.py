@@ -12,7 +12,7 @@ from ..auth import require_agent
 from .. import audit, config, mtls
 from ..db import get_db
 from ..models import Agent, Asset, Detection, EnrollToken, Org, Scan, User
-from ..tenancy import current_org, current_user, require_role
+from ..tenancy import _set_rls_org, current_org, current_user, require_role
 from ..version_match import service_matches
 from ..schemas import (
     AssetsRequest,
@@ -115,6 +115,10 @@ def enroll(req: EnrollRequest, db: Session = Depends(get_db)) -> EnrollResponse:
         raise HTTPException(status_code=401, detail="invalid or used enroll token")
     if token.expires_at is not None and _ensure_aware(token.expires_at) < _now():
         raise HTTPException(status_code=401, detail="enroll token expired")
+    # No agent/session exists yet, so scope RLS to the token's org before writing
+    # the agent row (and updating its cert below). Required once RLS is FORCEd
+    # (migration 0011); no-op on SQLite.
+    _set_rls_org(db, token.org_id)
     agent = Agent(
         id=str(uuid.uuid4()),
         org_id=token.org_id,
@@ -134,6 +138,10 @@ def enroll(req: EnrollRequest, db: Session = Depends(get_db)) -> EnrollResponse:
     # Issue an mTLS client cert bound to this agent. Bearer agent_secret is still
     # returned as the dev/plaintext fallback.
     cert = mtls.issue_client_cert(db, agent.id, agent.org_id)
+    # The commit above (and any inside ensure_ca on first boot) dropped the SET
+    # LOCAL ROLE + org GUC, so re-scope before updating the RLS-protected agent
+    # row with its cert fingerprint.
+    _set_rls_org(db, agent.org_id)
     agent.cert_fingerprint = cert["fingerprint"]
     agent.cert_not_after = cert["not_after"]
     db.commit()

@@ -5,8 +5,10 @@ import type { Severity, Exposure } from "./data.ts";
 // to the hosted control plane. Override either with VITE_API_BASE.
 const BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? "https://api.trypalisade.dev" : "");
 
-const TOKEN_KEY = "palisade_token";
-let token: string | null = localStorage.getItem(TOKEN_KEY);
+// The session token lives only in memory; persistence is the httpOnly
+// `palisade_session` cookie set by the control plane, which JS cannot read, so
+// XSS cannot exfiltrate it. A page refresh rehydrates via fetchMe() + cookie.
+let token: string | null = null;
 
 export function getToken(): string | null {
   return token;
@@ -14,12 +16,10 @@ export function getToken(): string | null {
 
 export function setToken(t: string): void {
   token = t;
-  localStorage.setItem(TOKEN_KEY, t);
 }
 
 export function clearToken(): void {
   token = null;
-  localStorage.removeItem(TOKEN_KEY);
 }
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -31,6 +31,7 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
+    credentials: "include",
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 401) {

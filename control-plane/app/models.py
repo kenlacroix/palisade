@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     String,
@@ -118,6 +119,11 @@ class Scan(Base):
 
 class Finding(Base):
     __tablename__ = "finding"
+    # Fingerprint uniqueness is scoped per org (migration 0011): a global unique
+    # let one tenant's fingerprint collide with another's and overwrite it.
+    __table_args__ = (
+        Index("uq_finding_org_fingerprint", "org_id", "fingerprint", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), default=DEMO_ORG_ID)
@@ -126,7 +132,9 @@ class Finding(Base):
     scan_id: Mapped[str | None] = mapped_column(String, nullable=True)
     severity: Mapped[str] = mapped_column(String, default="info")
     status: Mapped[str] = mapped_column(String, default="open")  # open|resolved|muted|regressed
-    fingerprint: Mapped[str] = mapped_column(String, unique=True, index=True)
+    # Indexed via the composite unique in __table_args__; no standalone index
+    # (nothing queries fingerprint without org_id — see migration 0011).
+    fingerprint: Mapped[str] = mapped_column(String)
     evidence: Mapped[dict] = mapped_column(JSON, default=dict)
     # Evidence sealed at rest (AES-256-GCM, nonce||ciphertext) under the org's
     # data key. Populated only when a KEK is configured; then `evidence` is empty
