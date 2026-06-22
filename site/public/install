@@ -7,7 +7,7 @@
 # release asset and falling back to a source build (needs Go 1.22+) when no
 # binary is published for this platform. Then enroll:
 #
-#   palisade enroll --token <token> --server https://api.trypalisade.dev
+#   PALISADE_ENROLL_TOKEN=<token> palisade enroll --server https://api.trypalisade.dev
 set -eu
 
 REPO="kenlacroix/palisade"
@@ -51,6 +51,30 @@ install_binary() { # <src-file>
   esac
 }
 
+sha256_of() { # <file> -> prints hex digest
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    die "no sha256 tool found (need sha256sum or shasum) to verify the download"
+  fi
+}
+
+verify_checksum() { # <file> <asset-name>
+  sums=$(mktemp)
+  curl -fsSL "$sums_url" -o "$sums" 2>/dev/null ||
+    { rm -f "$sums"; die "could not download SHA256SUMS to verify ${2}"; }
+  want=$(awk -v a="$2" '$2 == a || $2 == "*" a {print $1}' "$sums" | head -n1)
+  rm -f "$sums"
+  [ -n "$want" ] || die "no checksum for ${2} in SHA256SUMS"
+  got=$(sha256_of "$1")
+  if [ "$want" != "$got" ]; then
+    die "checksum mismatch for ${2}: expected ${want}, got ${got}"
+  fi
+  log "verified ${2} (sha256 ${got})"
+}
+
 build_from_source() {
   command -v go >/dev/null 2>&1 || die "Go 1.22+ required to build from source: https://go.dev/dl/"
   command -v git >/dev/null 2>&1 || die "git required to build from source"
@@ -67,14 +91,17 @@ build_from_source() {
 
 # --- install: prefer a prebuilt release, fall back to source ---
 if [ "$VERSION" = "latest" ]; then
-  url="https://github.com/${REPO}/releases/latest/download/${asset}"
+  base="https://github.com/${REPO}/releases/latest/download"
 else
-  url="https://github.com/${REPO}/releases/download/${VERSION}/${asset}"
+  base="https://github.com/${REPO}/releases/download/${VERSION}"
 fi
+url="${base}/${asset}"
+sums_url="${base}/SHA256SUMS"
 
 tmp=$(mktemp)
 if curl -fsSL "$url" -o "$tmp" 2>/dev/null; then
   log "downloaded ${asset} (${VERSION})"
+  verify_checksum "$tmp" "$asset"
   install_binary "$tmp"
 else
   rm -f "$tmp"
@@ -82,4 +109,4 @@ else
   build_from_source
 fi
 
-log "done. Next: ${BIN} enroll --token <token> --server https://api.trypalisade.dev"
+log "done. Next: PALISADE_ENROLL_TOKEN=<token> ${BIN} enroll --server https://api.trypalisade.dev"

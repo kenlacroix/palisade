@@ -6,6 +6,7 @@ set -eu
 
 : "${PALISADE_SERVER:?PALISADE_SERVER must be set (control plane base URL)}"
 : "${PALISADE_ENROLL_TOKEN:=PLS-DEMO}"
+export PALISADE_ENROLL_TOKEN
 : "${PALISADE_HOME:=/var/lib/palisade}"
 export PALISADE_HOME
 
@@ -40,8 +41,8 @@ echo "palisade-demo: control plane is up"
 if [ -f "${PALISADE_HOME}/config.json" ]; then
   echo "palisade-demo: already enrolled (${PALISADE_HOME}/config.json present), skipping enroll"
 else
-  echo "palisade-demo: enrolling with token ${PALISADE_ENROLL_TOKEN}"
-  if ! palisade enroll --token "$PALISADE_ENROLL_TOKEN" --server "$PALISADE_SERVER"; then
+  echo "palisade-demo: enrolling"
+  if ! palisade enroll --server "$PALISADE_SERVER"; then
     if [ -f "${PALISADE_HOME}/config.json" ]; then
       echo "palisade-demo: enroll reported an error but config.json exists; continuing"
     else

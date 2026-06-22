@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import timedelta
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +11,7 @@ from . import config, mtls, observability
 from .catalog import seed_detections
 from .config import cors_origins
 from .db import SessionLocal, init_db
-from .models import DEMO_ORG_ID, EnrollToken, Membership, Org, User
+from .models import DEMO_ORG_ID, EnrollToken, Membership, Org, User, _now
 from .queue import close_pool, init_pool
 from .routers import agents, alerts, auth_routes, catalog, detections, members, read, scans
 from .tenancy import hash_password
@@ -44,10 +45,25 @@ def _bootstrap() -> None:
         ).scalar_one_or_none() is None:
             db.add(Membership(user_id=demo.id, org_id=DEMO_ORG_ID, role="owner"))
 
-        # Seed single-use enroll tokens from env into the demo org.
+        # Production must not boot with the well-known demo enroll token: it is a
+        # static, publicly known, reused secret. Force operators to set strong,
+        # unique PALISADE_ENROLL_TOKENS.
+        if config.is_production() and "PLS-DEMO" in config.enroll_tokens():
+            raise RuntimeError(
+                "refusing to seed the well-known 'PLS-DEMO' enroll token in production; "
+                "set PALISADE_ENROLL_TOKENS to strong, unique values"
+            )
+
+        # Seed single-use enroll tokens from env into the demo org. Bootstrap
+        # tokens carry a TTL and are re-armed on each boot so a restart re-enables
+        # enrollment without leaving an indefinitely valid token.
+        bootstrap_expiry = _now() + timedelta(seconds=config.BOOTSTRAP_TOKEN_TTL_S)
         for tok in config.enroll_tokens():
-            if db.get(EnrollToken, tok) is None:
-                db.add(EnrollToken(token=tok, org_id=DEMO_ORG_ID, label="seed"))
+            existing = db.get(EnrollToken, tok)
+            if existing is None:
+                db.add(EnrollToken(token=tok, org_id=DEMO_ORG_ID, label="seed", expires_at=bootstrap_expiry))
+            elif existing.used_at is None:
+                existing.expires_at = bootstrap_expiry
         db.commit()
 
         # Ensure the platform-wide agent CA exists on first boot.
