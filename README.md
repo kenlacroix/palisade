@@ -1,5 +1,7 @@
 # Palisade
 
+**[trypalisade.dev](https://trypalisade.dev)**
+
 Attack-surface monitoring for self-hosted and AI-infra services. A pull-only
 agent enrolls once, discovers listening services on-host, and runs CVE
 detections locally — only normalized findings ever leave the host. A FastAPI
@@ -192,7 +194,10 @@ RLS on Postgres, a durable **Arq + Redis** queue/worker for AI triage and
 alert delivery (with an in-process `BackgroundTasks` fallback when `REDIS_URL`
 is unset), and a pluggable **`module` detection engine** (a compiled `spec_ref`
 registry in the agent; first module is the Next.js middleware bypass,
-CVE-2025-29927). Production TODOs (see `SPEC.md` and inline `TODO(prod)`
-markers): per-org encryption of evidence at rest and alert quiet hours.
+CVE-2025-29927), **per-org encryption of evidence at rest** (AES-256-GCM under a
+per-org wrapped data key, migration 0005), and **per-rule alert quiet hours**
+(deferred delivery released when the window closes, migration 0007). Not yet
+built (see `SPEC.md`): the production ops layer — IaC, a live deploy, public
+status page, observability dashboards, and runbooks.
 </content>
 </invoke>

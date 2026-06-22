@@ -7,10 +7,10 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import alerting, notify
+from .. import alerting, audit, notify
 from ..db import get_db
-from ..models import Alert, AlertChannel, AlertRule, Asset, Detection, Finding, Org
-from ..tenancy import current_org, require_role
+from ..models import Alert, AlertChannel, AlertRule, Asset, Detection, Finding, Org, User
+from ..tenancy import current_org, current_user, require_role
 from ..schemas import (
     AlertChannelCreate,
     AlertChannelRow,
@@ -120,6 +120,7 @@ def list_channels(org: Org = Depends(current_org), db: Session = Depends(get_db)
 def create_channel(
     body: AlertChannelCreate,
     org: Org = Depends(current_org),
+    user: User = Depends(current_user),
     _: str = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ) -> AlertChannelRow:
@@ -131,6 +132,8 @@ def create_channel(
         enabled=body.enabled,
     )
     db.add(c)
+    db.flush()
+    audit.record(db, org_id=org.id, actor=user.email, action="alert_channel.create", target=c.name or c.id)
     db.commit()
     return _channel_row(c)
 
@@ -140,6 +143,7 @@ def update_channel(
     channel_id: str = Path(...),
     body: dict[str, Any] = Body(...),
     org: Org = Depends(current_org),
+    user: User = Depends(current_user),
     _: str = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ) -> AlertChannelRow:
@@ -151,6 +155,7 @@ def update_channel(
     if "config" in body and isinstance(body["config"], dict):
         # Merge so omitted secret keys keep their stored value.
         c.config = {**(c.config or {}), **body["config"]}
+    audit.record(db, org_id=org.id, actor=user.email, action="alert_channel.update", target=c.name or c.id)
     db.commit()
     return _channel_row(c)
 
@@ -159,6 +164,7 @@ def update_channel(
 def delete_channel(
     channel_id: str = Path(...),
     org: Org = Depends(current_org),
+    user: User = Depends(current_user),
     _: str = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -170,6 +176,7 @@ def delete_channel(
     for r in rules:
         db.delete(r)
     db.delete(c)
+    audit.record(db, org_id=org.id, actor=user.email, action="alert_channel.delete", target=c.name or channel_id)
     db.commit()
     return Response(status_code=204)
 
@@ -217,6 +224,7 @@ def list_rules(org: Org = Depends(current_org), db: Session = Depends(get_db)) -
 def create_rule(
     body: AlertRuleCreate,
     org: Org = Depends(current_org),
+    user: User = Depends(current_user),
     _: str = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ) -> AlertRuleRow:
@@ -236,6 +244,8 @@ def create_rule(
         quiet_hours_mode=body.quiet_hours_mode,
     )
     db.add(r)
+    db.flush()
+    audit.record(db, org_id=org.id, actor=user.email, action="alert_rule.create", target=r.name or r.id)
     db.commit()
     return _rule_row(r, channel.name)
 
@@ -245,6 +255,7 @@ def update_rule(
     rule_id: str = Path(...),
     body: dict[str, Any] = Body(...),
     org: Org = Depends(current_org),
+    user: User = Depends(current_user),
     _: str = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ) -> AlertRuleRow:
@@ -265,6 +276,7 @@ def update_rule(
         if channel is None or channel.org_id != org.id:
             raise HTTPException(status_code=400, detail="channel_id not in this org")
         r.channel_id = body["channel_id"]
+    audit.record(db, org_id=org.id, actor=user.email, action="alert_rule.update", target=r.name or r.id)
     db.commit()
     channel = db.get(AlertChannel, r.channel_id)
     return _rule_row(r, channel.name if channel else "")
@@ -274,10 +286,13 @@ def update_rule(
 def delete_rule(
     rule_id: str = Path(...),
     org: Org = Depends(current_org),
+    user: User = Depends(current_user),
     _: str = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ) -> Response:
     r = _get_rule(db, org.id, rule_id)
+    name = r.name or rule_id
     db.delete(r)
+    audit.record(db, org_id=org.id, actor=user.email, action="alert_rule.delete", target=name)
     db.commit()
     return Response(status_code=204)

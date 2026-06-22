@@ -460,6 +460,29 @@ def test_minted_enroll_token_is_single_use():
         _cleanup(db_path)
 
 
+def test_mint_enroll_token_writes_audit_log():
+    from app.models import AuditLog
+
+    client, db_path = _make_client()
+    try:
+        with client:
+            r = client.post(
+                "/v1/agents/enroll-tokens", json={"label": "nas"}, headers=_session(client)
+            )
+            assert r.status_code == 200, r.text
+            with db_module.SessionLocal() as db:
+                rows = db.query(AuditLog).filter(AuditLog.action == "enroll_token.mint").all()
+                assert len(rows) == 1, rows
+                entry = rows[0]
+                assert entry.actor == "demo@palisade.local"
+                assert entry.action == "enroll_token.mint"
+                assert entry.target == "nas"
+                # The minted secret is never recorded in the audit trail.
+                assert entry.target != r.json()["token"]
+    finally:
+        _cleanup(db_path)
+
+
 def test_mint_enroll_token_requires_admin():
     client, db_path = _make_client()
     try:
@@ -495,6 +518,209 @@ def test_expired_enroll_token_rejected():
         _cleanup(db_path)
 
 
+def _seed_user(email: str) -> str:
+    """Insert a passwordless User (no membership) and return its id."""
+    from app.models import User
+
+    with db_module.SessionLocal() as db:
+        u = User(email=email, name=email.split("@")[0])
+        db.add(u)
+        db.commit()
+        return u.id
+
+
+def test_enroll_token_revoke():
+    client, db_path = _make_client()
+    try:
+        with client:
+            sess = _session(client)
+            tok = client.post(
+                "/v1/agents/enroll-tokens", json={"label": "nas"}, headers=sess
+            ).json()["token"]
+
+            # Revoke the unused token: it can no longer enroll.
+            assert client.delete(f"/v1/agents/enroll-tokens/{tok}", headers=sess).status_code == 204
+            assert _enroll_with(client, tok).status_code == 401
+            # Revoking again 404s (already gone).
+            assert client.delete(f"/v1/agents/enroll-tokens/{tok}", headers=sess).status_code == 404
+
+            r = client.get("/v1/audit", headers=sess)
+            entry = next(e for e in r.json()["entries"] if e["action"] == "enroll_token.revoke")
+            assert entry["target"] == "nas", entry
+    finally:
+        _cleanup(db_path)
+
+
+def test_revoke_used_token_is_404():
+    client, db_path = _make_client()
+    try:
+        with client:
+            sess = _session(client)
+            tok = client.post("/v1/agents/enroll-tokens", json={}, headers=sess).json()["token"]
+            assert _enroll_with(client, tok).status_code == 200  # token now spent
+            assert client.delete(f"/v1/agents/enroll-tokens/{tok}", headers=sess).status_code == 404
+    finally:
+        _cleanup(db_path)
+
+
+def test_revoke_requires_admin():
+    client, db_path = _make_client()
+    try:
+        with client:
+            assert client.delete("/v1/agents/enroll-tokens/PLS-DEMO").status_code == 401
+    finally:
+        _cleanup(db_path)
+
+
+def test_membership_lifecycle_and_audit():
+    client, db_path = _make_client()
+    try:
+        with client:
+            sess = _session(client)
+            uid = _seed_user("alice@palisade.local")
+
+            # Adding a non-existent user 404s.
+            r = client.post("/v1/members", json={"email": "ghost@x.io", "role": "member"}, headers=sess)
+            assert r.status_code == 404, r.text
+
+            # Add alice as a member.
+            r = client.post(
+                "/v1/members", json={"email": "alice@palisade.local", "role": "member"}, headers=sess
+            )
+            assert r.status_code == 200, r.text
+            assert r.json()["role"] == "member"
+
+            # Duplicate add 409s.
+            r = client.post(
+                "/v1/members", json={"email": "alice@palisade.local", "role": "member"}, headers=sess
+            )
+            assert r.status_code == 409, r.text
+
+            # She shows up in the list.
+            r = client.get("/v1/members", headers=sess)
+            emails = {m["email"]: m["role"] for m in r.json()["members"]}
+            assert emails["alice@palisade.local"] == "member"
+
+            # Promote to admin.
+            r = client.patch(f"/v1/members/{uid}", json={"role": "admin"}, headers=sess)
+            assert r.status_code == 200 and r.json()["role"] == "admin", r.text
+
+            # Remove her.
+            assert client.delete(f"/v1/members/{uid}", headers=sess).status_code == 204
+
+            r = client.get("/v1/audit", headers=sess)
+            actions = {e["action"] for e in r.json()["entries"]}
+            assert {"membership.create", "membership.update", "membership.delete"} <= actions
+    finally:
+        _cleanup(db_path)
+
+
+def test_last_owner_cannot_be_demoted_or_removed():
+    client, db_path = _make_client()
+    try:
+        with client:
+            sess = _session(client)
+            me = client.get("/v1/auth/me", headers=sess).json()
+            owner_id = me["user"]["id"]
+
+            r = client.patch(f"/v1/members/{owner_id}", json={"role": "member"}, headers=sess)
+            assert r.status_code == 400, r.text
+            assert "last owner" in r.json()["detail"]
+
+            r = client.delete(f"/v1/members/{owner_id}", headers=sess)
+            assert r.status_code == 400, r.text
+    finally:
+        _cleanup(db_path)
+
+
+def test_members_requires_admin():
+    client, db_path = _make_client()
+    try:
+        with client:
+            assert client.get("/v1/members").status_code == 401
+    finally:
+        _cleanup(db_path)
+
+
+def test_login_writes_session_audit():
+    from app.models import AuditLog
+
+    client, db_path = _make_client()
+    try:
+        with client:
+            _session(client)  # logs in the seeded owner
+            with db_module.SessionLocal() as db:
+                rows = db.query(AuditLog).filter(AuditLog.action == "session.create").all()
+                assert len(rows) == 1, rows
+                assert rows[0].actor == "demo@palisade.local"
+    finally:
+        _cleanup(db_path)
+
+
+def test_audit_endpoint_lists_actions_newest_first():
+    client, db_path = _make_client()
+    try:
+        with client:
+            sess = _session(client)  # session.create
+            r = client.post("/v1/agents/enroll-tokens", json={"label": "nas"}, headers=sess)
+            assert r.status_code == 200, r.text  # enroll_token.mint
+
+            r = client.get("/v1/audit", headers=sess)
+            assert r.status_code == 200, r.text
+            entries = r.json()["entries"]
+            actions = [e["action"] for e in entries]
+            assert "session.create" in actions
+            assert "enroll_token.mint" in actions
+            # newest first: the mint (later) precedes the login.
+            assert actions.index("enroll_token.mint") < actions.index("session.create")
+            # no secret leaks into the trail.
+            assert all("PLS-" not in (e["target"] or "") for e in entries)
+    finally:
+        _cleanup(db_path)
+
+
+def test_audit_endpoint_requires_session():
+    client, db_path = _make_client()
+    try:
+        with client:
+            assert client.get("/v1/audit").status_code == 401
+    finally:
+        _cleanup(db_path)
+
+
+def test_detection_publish_writes_audit():
+    client, db_path = _make_client()
+    try:
+        with client:
+            sess = _session(client)
+            r = client.post("/v1/detections", json=_accept_body(), headers=sess)
+            assert r.status_code == 200, r.text
+            r = client.get("/v1/audit", headers=sess)
+            entry = next(e for e in r.json()["entries"] if e["action"] == "detection.publish")
+            assert entry["target"] == "acme-rce", entry
+    finally:
+        _cleanup(db_path)
+
+
+def test_mute_writes_audit():
+    client, db_path = _make_client()
+    try:
+        with client:
+            _, finding_id = _ingest_finding(client)
+            sess = _session(client)
+            r = client.post(
+                f"/v1/findings/{finding_id}/mute",
+                json={"reason": "accepted", "ttl_s": 600},
+                headers=sess,
+            )
+            assert r.status_code == 200, r.text
+            r = client.get("/v1/audit", headers=sess)
+            entry = next(e for e in r.json()["entries"] if e["action"] == "finding.mute")
+            assert entry["target"] == finding_id, entry
+    finally:
+        _cleanup(db_path)
+
+
 if __name__ == "__main__":
     test_draft_requires_api_key()
     test_accept_detection_closes_loop()
@@ -505,6 +731,18 @@ if __name__ == "__main__":
     test_mute_finding_wiring()
     test_triage_noop_when_unconfigured()
     test_minted_enroll_token_is_single_use()
+    test_mint_enroll_token_writes_audit_log()
     test_mint_enroll_token_requires_admin()
     test_expired_enroll_token_rejected()
+    test_login_writes_session_audit()
+    test_audit_endpoint_lists_actions_newest_first()
+    test_audit_endpoint_requires_session()
+    test_detection_publish_writes_audit()
+    test_mute_writes_audit()
+    test_enroll_token_revoke()
+    test_revoke_used_token_is_404()
+    test_revoke_requires_admin()
+    test_membership_lifecycle_and_audit()
+    test_last_owner_cannot_be_demoted_or_removed()
+    test_members_requires_admin()
     print("API TESTS OK")

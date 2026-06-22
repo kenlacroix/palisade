@@ -247,11 +247,15 @@ curl -s -X POST http://127.0.0.1:8000/v1/detections -H "$UAUTH" -H 'content-type
 
 - The agent scans **on-host only**; the target must listen on this machine.
   Port 4000 is required for the demo because discover maps 4000 -> `litellm`.
-- The Next.js detection (`nextjs-middleware-bypass`) is `engine: module` and the
-  agent logs+skips module detections, so it cannot be demoed end-to-end yet.
-- Two credentials: agents send a bearer `agent_secret` (mTLS is a documented
-  TODO); the web UI / read APIs require a user **session** bearer from
-  `POST /v1/auth/login` (step 5), org-scoped with owner/admin/member/viewer roles.
+- The Next.js detection (`nextjs-middleware-bypass`) is `engine: module`; its
+  `spec_ref` (`modules/nextjs_middleware_bypass`) is registered in the agent
+  binary and runs on-host like any other detection. Module detections whose
+  `spec_ref` is unregistered and carry no declarative `flow` are logged+skipped.
+- Two credentials: agents send a bearer `agent_secret`; in production enroll also
+  issues a client cert from an internal CA (mTLS), verified at a TLS-terminating
+  proxy, with the bearer as the plaintext-demo fallback. The web UI / read APIs
+  require a user **session** bearer from `POST /v1/auth/login` (step 5),
+  org-scoped with owner/admin/member/viewer roles.
 - Catalog bundles are Ed25519-signed when `PALISADE_SIGNING_KEY` is set
   (step 8); unset → `signature` stays `"stub"` and the agent proceeds in dev
   mode after a warning.

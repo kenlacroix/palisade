@@ -6,15 +6,17 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from .. import encryption, snapshots
+from .. import audit, encryption, snapshots
 from ..db import get_db
-from ..models import Agent, Asset, Detection, Finding, Org
-from ..tenancy import current_org, require_role
+from ..models import Agent, Asset, AuditLog, Detection, Finding, Org, User
+from ..tenancy import current_org, current_user, require_role
 from ..schemas import (
     AgentRow,
     AgentsList,
     AssetRow,
     AssetsList,
+    AuditEntryRow,
+    AuditLogList,
     DetectionRow,
     DetectionsList,
     FindingRow,
@@ -122,6 +124,7 @@ def mute_finding(
     body: MuteRequest,
     finding_id: str = Path(...),
     org: Org = Depends(current_org),
+    user: User = Depends(current_user),
     _: str = Depends(require_role("member")),
     db: Session = Depends(get_db),
 ) -> FindingRow:
@@ -131,6 +134,7 @@ def mute_finding(
     f.status = "muted"
     f.mute_reason = body.reason
     f.mute_until = datetime.now(timezone.utc) + timedelta(seconds=body.ttl_s)
+    audit.record(db, org_id=org.id, actor=user.email, action="finding.mute", target=finding_id)
     db.commit()
     return _finding_row(db, f)
 
@@ -252,3 +256,26 @@ def list_agents(
             )
         )
     return AgentsList(agents=rows)
+
+
+@router.get("/audit", response_model=AuditLogList)
+def list_audit(
+    limit: int = Query(default=100, ge=1, le=500),
+    org: Org = Depends(current_org),
+    _: str = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> AuditLogList:
+    # Admin-only view of the org's privileged-action trail, newest first. RLS
+    # (migration 0010) also clips this to current_org on Postgres.
+    entries = db.execute(
+        select(AuditLog)
+        .where(AuditLog.org_id == org.id)
+        .order_by(AuditLog.at.desc())
+        .limit(limit)
+    ).scalars().all()
+    return AuditLogList(
+        entries=[
+            AuditEntryRow(id=e.id, actor=e.actor, action=e.action, target=e.target, at=_iso(e.at))
+            for e in entries
+        ]
+    )

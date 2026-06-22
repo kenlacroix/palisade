@@ -281,6 +281,21 @@ class OrgEncryptionKey(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+# --- audit trail: one row per privileged action (SPEC section 6 / 11) ---
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True)
+    # Who acted (user email) and what they did, e.g. action="enroll_token.mint".
+    # target identifies the acted-on object (label or non-secret id), nullable
+    # for actions with no single subject.
+    actor: Mapped[str] = mapped_column(String)
+    action: Mapped[str] = mapped_column(String)
+    target: Mapped[str | None] = mapped_column(String, nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
 # --- mTLS: internal certificate authority (single platform-wide row) ---
 class CertAuthority(Base):
     __tablename__ = "cert_authority"

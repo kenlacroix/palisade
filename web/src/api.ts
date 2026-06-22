@@ -199,6 +199,24 @@ export const fetchMe = () => get<Session>("/v1/auth/me");
 
 export const switchOrg = (org_id: string) => post<Session>("/v1/auth/switch-org", { org_id });
 
+export interface MemberRow {
+  user_id: string;
+  email: string;
+  name: string;
+  role: Role;
+  created_at: string | null;
+}
+
+export const fetchMembers = () => get<{ members: MemberRow[] }>("/v1/members");
+
+export const addMember = (email: string, role: Role) =>
+  post<MemberRow>("/v1/members", { email, role });
+
+export const updateMemberRole = (userId: string, role: Role) =>
+  patch<MemberRow>(`/v1/members/${userId}`, { role });
+
+export const removeMember = (userId: string) => del<void>(`/v1/members/${userId}`);
+
 export interface AlertChannel {
   id: string;
   type: "telegram" | "email" | "webhook";
@@ -261,6 +279,16 @@ export const testChannel = (id: string) =>
   post<{ ok: boolean; error: string | null }>(`/v1/alert-channels/${id}/test`);
 
 export const fetchRules = () => get<{ rules: AlertRule[] }>("/v1/alert-rules");
+
+export interface AuditEntry {
+  id: string;
+  actor: string;
+  action: string;
+  target: string | null;
+  at: string;
+}
+
+export const fetchAudit = () => get<{ entries: AuditEntry[] }>("/v1/audit");
 
 export const createRule = (body: {
   name: string;
