@@ -43,6 +43,10 @@
       "type": "string",
       "enum": ["nuclei", "module"]
     },
+    "scheme": {
+      "type": "string",
+      "enum": ["http", "https"]
+    },
     "match": {
       "type": "object",
       "additionalProperties": false,

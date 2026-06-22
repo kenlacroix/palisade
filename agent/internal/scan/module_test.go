@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"palisade/agent/internal/catalog"
@@ -63,12 +64,16 @@ func TestNextjsBypassNoGate(t *testing.T) {
 	}
 }
 
-func runModule(t *testing.T, base string) (Finding, bool) {
+func runModule(t *testing.T, srvURL string) (Finding, bool) {
 	t.Helper()
 	s := New()
 	det := catalog.Detection{ID: "nextjs-middleware-bypass", Engine: "module", Severity: "high", SpecRef: "modules/nextjs_middleware_bypass"}
 	target := catalog.ScanTarget{AssetID: "asset-1", DetectionIDs: []string{det.ID}}
-	out := s.RunTarget(context.Background(), base, target, map[string]catalog.Detection{det.ID: det})
+	u, err := url.Parse(srvURL)
+	if err != nil {
+		t.Fatalf("parse server url: %v", err)
+	}
+	out := s.RunTarget(context.Background(), u.Host, target, map[string]catalog.Detection{det.ID: det})
 	if len(out) == 0 {
 		return Finding{}, false
 	}

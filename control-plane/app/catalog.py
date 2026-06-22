@@ -80,6 +80,8 @@ def _normalize(raw: dict[str, Any]) -> dict[str, Any]:
         "signature": raw.get("signature") or "stub",
         "cvss": raw.get("cvss"),
     }
+    if raw.get("scheme"):
+        out["scheme"] = raw["scheme"]
     if out["engine"] == "module":
         out["spec_ref"] = raw.get("spec_ref", "")
         if raw.get("flow"):

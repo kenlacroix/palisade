@@ -170,14 +170,17 @@ Key vars:
 | `PALISADE_DEMO_USER_EMAIL` | `demo@palisade.local` | Demo org owner seeded at bootstrap. |
 | `PALISADE_DEMO_USER_PASSWORD` | `palisade` | Demo user password. |
 | `PALISADE_SESSION_TTL_S` | `604800` (7d) | Web UI bearer-session lifetime, seconds. |
-| `PALISADE_SIGNING_KEY` | unset (`"stub"`) | Ed25519 seed (base64) for bundle signing. |
-| `PALISADE_CATALOG_PUBKEY` | demo key | Agent-side pinned bundle pubkey (base64). |
+| `PALISADE_SIGNING_KEY` | unset (demo key) | Ed25519 seed (base64) for bundle signing. Unset signs with the **public** demo key and warns — set it in production. |
+| `PALISADE_CATALOG_PUBKEY` | demo key | Agent-side pinned bundle pubkey (base64); must match the signing key. |
+| `PALISADE_ALLOW_UNSIGNED` | unset | Agent dev escape hatch — if set, runs unsigned/`stub` bundles instead of refusing. Never set in production. |
 | `ANTHROPIC_API_KEY` | unset | Enables AI drafting + finding triage. |
 | `PALISADE_DETECTIONS_DIR` | repo `detections/` | Source of seeded detection YAMLs. |
 
 ## Status
 
-Implemented: enroll/heartbeat/scan loop, signed catalog bundles, version-aware
+Implemented: enroll/heartbeat/scan loop, **Ed25519-signed catalog bundles**
+(agent verifies before running any detection and fails closed; `detections/README.md`
+covers keygen/rotation), version-aware
 matching, AI drafting + accept loop, CVSS, background AI triage, posture scoring
 with real 30-day trends, multi-tenancy (users/sessions/orgs + RBAC, single-use
 enroll tokens, Postgres row-level security per `org_id`), alerting

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
-from . import config, mtls
+from . import config, mtls, observability
 from .catalog import seed_detections
 from .config import cors_origins
 from .db import SessionLocal, init_db
@@ -69,6 +69,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Palisade Control Plane", version="0.1.0", lifespan=lifespan)
+
+# Structured JSON logging, request-id + per-request Prometheus metrics, /metrics.
+observability.install(app)
 
 # CORS open for localhost so the existing web/ prototype can point at it.
 app.add_middleware(

@@ -94,6 +94,18 @@ DEFERRED_RELEASE_EVERY_MIN = max(1, min(60, int(os.environ.get("PALISADE_DEFERRE
 SNAPSHOT_UTC_HOUR = max(0, min(23, int(os.environ.get("PALISADE_SNAPSHOT_UTC_HOUR", "0"))))
 
 
+# --- observability (Prometheus metrics + structured logs for Loki/promtail) ---
+# METRICS_ENABLED gates the /metrics endpoint and per-request metrics middleware.
+# LOG_LEVEL sets the root logging level; LOG_FORMAT is "json" (Loki-parseable,
+# default) or "text" (human-readable for local dev).
+def metrics_enabled() -> bool:
+    return os.environ.get("PALISADE_METRICS_ENABLED", "true").lower() not in ("0", "false", "no")
+
+
+LOG_LEVEL = os.environ.get("PALISADE_LOG_LEVEL", "INFO").upper()
+LOG_FORMAT = os.environ.get("PALISADE_LOG_FORMAT", "json").lower()
+
+
 def perimeter_scope_allowlist() -> list[str]:
     # Comma-separated hosts / domain suffixes / CIDRs the operator confirms are
     # in scope. EMPTY (default) = allow-all with a warning: dev and the existing
