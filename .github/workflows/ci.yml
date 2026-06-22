@@ -118,6 +118,12 @@ jobs:
         env:
           PALISADE_TEST_DATABASE_URL: postgresql+psycopg://palisade:palisade@localhost:5432/palisade
         run: python -m app.live_integration_test
+      # Proves FORCE ROW LEVEL SECURITY (migration 0011) actually isolates the
+      # app's own DB role across orgs -- the regression this branch fixes.
+      - name: RLS enforcement (Postgres)
+        env:
+          PALISADE_TEST_DATABASE_URL: postgresql+psycopg://palisade:palisade@localhost:5432/palisade
+        run: python -m app.rls_postgres_test
 
   detections:
     name: Detections (validate)

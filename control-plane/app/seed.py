@@ -28,6 +28,7 @@ from .models import (
     PostureSnapshot,
 )
 from .snapshots import SEVERITY_WEIGHTS
+from .tenancy import _set_rls_org
 
 # Mirror app.snapshots' scoring so seeded snapshots agree with the live scorer.
 ACTIVE_STATUSES = ("open", "regressed")
@@ -46,6 +47,10 @@ def _score(penalty: int) -> int:
 
 def seed_demo(db: Session) -> None:
     """Populate DEMO_ORG_ID with a believable dataset. No-op if assets exist."""
+    # Scope Postgres RLS to the demo org for this whole transaction: with RLS
+    # FORCEd (migration 0011), inserts/reads on the tenant tables below require a
+    # matching app.current_org_id GUC. No-op on SQLite.
+    _set_rls_org(db, DEMO_ORG_ID)
     existing = db.execute(
         select(Asset).where(Asset.org_id == DEMO_ORG_ID).limit(1)
     ).scalar_one_or_none()

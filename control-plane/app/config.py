@@ -8,6 +8,22 @@ from pathlib import Path
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./palisade.db")
 
+
+def allow_insecure_defaults() -> bool:
+    # Escape hatch for local dev and the public demo: when set, the startup
+    # preflight (app/preflight.py) downgrades insecure-default findings from a
+    # hard boot failure to a logged warning. NEVER set this on an exposed deploy.
+    return os.environ.get("PALISADE_ALLOW_INSECURE_DEFAULTS", "").lower() in ("1", "true", "yes")
+
+
+def is_production() -> bool:
+    # A real (internet-exposed) deployment: Postgres-backed and not explicitly
+    # opting into insecure defaults. Dev/test runs on SQLite and the public demo
+    # sets PALISADE_ALLOW_INSECURE_DEFAULTS=1, so neither is treated as prod.
+    # Drives fail-closed defaults (mTLS required, perimeter scope deny-by-default,
+    # preflight enforcement) without breaking the SQLite dev/test path.
+    return DATABASE_URL.startswith("postgresql") and not allow_insecure_defaults()
+
 # Durable job queue (Arq + Redis). Unset -> triage/alert delivery fall back to
 # in-process FastAPI BackgroundTasks (the dev/SQLite path; no Redis required).
 # Set in production so background work survives restarts and the API can scale.
@@ -69,7 +85,14 @@ def demo_mode() -> bool:
 # When true, agent endpoints REQUIRE a verified client cert and the bearer-secret
 # fallback is rejected. Default false so the plaintext demo/dev still works.
 def require_mtls() -> bool:
-    return os.environ.get("PALISADE_REQUIRE_MTLS", "").lower() in ("1", "true", "yes")
+    v = os.environ.get("PALISADE_REQUIRE_MTLS")
+    if v is not None:
+        return v.lower() in ("1", "true", "yes")
+    # Unset: required by default in a hardened production deployment, so a stolen
+    # bearer agent_secret alone can't authenticate an agent. Relaxed for dev/test
+    # (SQLite) and the public demo, where agents enroll over plaintext and rely
+    # on the bearer fallback. Set explicitly to override either way.
+    return is_production()
 
 
 # Header carrying the PEM client cert from a TLS-terminating proxy (nginx
@@ -127,8 +150,9 @@ LOG_FORMAT = os.environ.get("PALISADE_LOG_FORMAT", "json").lower()
 
 def perimeter_scope_allowlist() -> list[str]:
     # Comma-separated hosts / domain suffixes / CIDRs the operator confirms are
-    # in scope. EMPTY (default) = allow-all with a warning: dev and the existing
-    # back-compat path must keep working, so we never silently scan nothing. Set
-    # this in production to confirm scope before any probe leaves the box.
+    # in scope. EMPTY default = deny-all in production (is_production()) so a
+    # misconfigured prod never probes an unconfirmed target, and allow-all for
+    # dev/demo so the SQLite path and back-compat flow keep working. Set this in
+    # production to confirm scope before any probe leaves the box.
     raw = os.environ.get("PALISADE_PERIMETER_SCOPE_ALLOWLIST", "")
     return [s.strip() for s in raw.split(",") if s.strip()]

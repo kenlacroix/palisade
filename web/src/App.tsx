@@ -3,7 +3,6 @@ import {
   clearToken,
   fetchAgents,
   fetchMe,
-  getToken,
   logout,
   relativeTime,
   switchOrg,
@@ -35,7 +34,9 @@ const NAV: { key: View; label: string; icon: string; adminOnly?: boolean }[] = [
 type AuthState = "checking" | "out" | "in";
 
 export default function App() {
-  const [auth, setAuth] = useState<AuthState>(getToken() ? "checking" : "out");
+  // Always probe on load: the session lives in the httpOnly cookie, so a
+  // refresh rehydrates via fetchMe() rather than a JS-readable token.
+  const [auth, setAuth] = useState<AuthState>("checking");
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {

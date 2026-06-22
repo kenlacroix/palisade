@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import audit
+from ..netguard import safe_get
 from ..catalog import bundle_version
 from ..config import ANTHROPIC_API_KEY, DRAFT_MODEL
 from ..db import get_db
@@ -37,12 +37,9 @@ status/word matchers. Do NOT include destructive payloads.
 
 
 def _fetch(url: str) -> str:
-    try:
-        r = httpx.get(url, timeout=10, follow_redirects=True, headers={"User-Agent": "palisade-draft/0.1"})
-        r.raise_for_status()
-        return r.text[:20000]
-    except Exception:
-        return ""
+    # SSRF-hardened: see app/netguard.py. An empty string means "could not
+    # fetch the page" and the caller falls back to the URL alone.
+    return safe_get(url, timeout=10, max_bytes=20000, user_agent="palisade-draft/0.1")
 
 
 @router.post("/draft", response_model=DraftResponse)

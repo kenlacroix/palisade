@@ -49,6 +49,10 @@ services:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in control-plane/.env (copy .env.example)}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       PALISADE_AUTO_MIGRATE: "0"
+      # Startup refuses to boot on public default secrets (DB password, signing
+      # key, demo password, evidence KEK). Local dev sets this to 1 in .env; for
+      # any exposed deploy leave it 0 and provide real secrets.
+      PALISADE_ALLOW_INSECURE_DEFAULTS: ${PALISADE_ALLOW_INSECURE_DEFAULTS:-0}
       PALISADE_ENROLL_TOKENS: ${PALISADE_ENROLL_TOKENS:-PLS-DEMO}
       PALISADE_CORS_ORIGINS: ${PALISADE_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       PALISADE_DEMO_USER_EMAIL: ${PALISADE_DEMO_USER_EMAIL:-demo@palisade.local}

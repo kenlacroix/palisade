@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
-from . import config, mtls, observability
+from . import config, mtls, observability, preflight
 from .catalog import seed_detections
 from .config import cors_origins
 from .db import SessionLocal, init_db
@@ -17,6 +17,9 @@ from .tenancy import hash_password
 
 
 def _bootstrap() -> None:
+    # Fail closed on insecure defaults in production (raises before we serve);
+    # only warns on the SQLite dev/test path and the public demo.
+    preflight.enforce()
     init_db()
     db = SessionLocal()
     try:

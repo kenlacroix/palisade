@@ -6,6 +6,7 @@ or:        pytest app/mtls_test.py
 """
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timedelta, timezone
 
 from cryptography import x509
@@ -17,7 +18,10 @@ from app import config
 from app import mtls
 from app.api_test import _cleanup, _enroll, _make_client
 from app.db import SessionLocal
-from app.models import Agent
+from app.models import Agent, CertAuthority
+
+_KEK_B64 = base64.b64encode(b"\x33" * 32).decode()
+_NOT_A_PEM = "BEGIN EC PRIVATE KEY"
 
 
 def _foreign_cert_pem() -> str:
@@ -136,6 +140,80 @@ def test_require_mtls_rejects_bearer(monkeypatch):
         _cleanup(db_path)
 
 
+# 5) No KEK: CA key stored as plaintext PEM; issue+verify still round-trips.
+def test_ca_key_plaintext_without_kek():
+    prev = config.EVIDENCE_KEK
+    config.EVIDENCE_KEK = ""
+    client, db_path = _make_client()
+    try:
+        with client:
+            db = SessionLocal()
+            try:
+                mtls.ensure_ca(db)
+                ca = db.get(CertAuthority, mtls.CA_ID)
+                assert ca is not None
+                assert "PRIVATE KEY" in ca.key_pem, "expected plaintext PEM"
+
+                issued = mtls.issue_client_cert(db, "agent-x", "org-demo")
+                assert mtls.verify_client_cert(db, issued["client_cert_pem"]) == (
+                    issued["fingerprint"]
+                )
+            finally:
+                db.close()
+    finally:
+        _cleanup(db_path)
+        config.EVIDENCE_KEK = prev
+
+
+# 6) KEK set: stored key_pem is NOT plaintext PEM, yet issue+verify round-trips.
+def test_ca_key_sealed_with_kek():
+    prev = config.EVIDENCE_KEK
+    config.EVIDENCE_KEK = _KEK_B64
+    client, db_path = _make_client()
+    try:
+        with client:
+            db = SessionLocal()
+            try:
+                mtls.ensure_ca(db)
+                ca = db.get(CertAuthority, mtls.CA_ID)
+                assert ca is not None
+                assert "PRIVATE KEY" not in ca.key_pem, "CA key leaked plaintext"
+                assert ca.key_pem.startswith("enc:v1:"), ca.key_pem[:16]
+
+                issued = mtls.issue_client_cert(db, "agent-y", "org-demo")
+                assert mtls.verify_client_cert(db, issued["client_cert_pem"]) == (
+                    issued["fingerprint"]
+                )
+            finally:
+                db.close()
+    finally:
+        _cleanup(db_path)
+        config.EVIDENCE_KEK = prev
+
+
+# 7) A legacy plaintext CA key is still usable once a KEK is configured.
+def test_legacy_plaintext_ca_key_readable_with_kek():
+    prev = config.EVIDENCE_KEK
+    config.EVIDENCE_KEK = ""
+    client, db_path = _make_client()
+    try:
+        with client:
+            db = SessionLocal()
+            try:
+                mtls.ensure_ca(db)  # writes plaintext (no KEK yet)
+                # KEK introduced after the row already exists.
+                config.EVIDENCE_KEK = _KEK_B64
+                issued = mtls.issue_client_cert(db, "agent-z", "org-demo")
+                assert mtls.verify_client_cert(db, issued["client_cert_pem"]) == (
+                    issued["fingerprint"]
+                )
+            finally:
+                db.close()
+    finally:
+        _cleanup(db_path)
+        config.EVIDENCE_KEK = prev
+
+
 class _MonkeyPatch:
     """Minimal monkeypatch shim for the __main__ runner (no pytest)."""
 
@@ -156,6 +234,9 @@ if __name__ == "__main__":
     test_issue_verify_roundtrip()
     test_enroll_issues_cert()
     test_cert_header_auth()
+    test_ca_key_plaintext_without_kek()
+    test_ca_key_sealed_with_kek()
+    test_legacy_plaintext_ca_key_readable_with_kek()
     mp = _MonkeyPatch()
     try:
         test_require_mtls_rejects_bearer(mp)

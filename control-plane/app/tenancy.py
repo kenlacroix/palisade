@@ -14,7 +14,7 @@ import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Cookie, Depends, Header, HTTPException, Request
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -63,17 +63,22 @@ def create_session(db: Session, user: User, org_id: str) -> UserSession:
     return sess
 
 
-def _bearer_token(authorization: str | None) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="missing bearer token")
-    return authorization.split(" ", 1)[1].strip()
+def _bearer_token(authorization: str | None, cookie: str | None) -> str:
+    # Header takes precedence; fall back to the httpOnly session cookie so the
+    # web UI no longer needs JS-readable token storage.
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization.split(" ", 1)[1].strip()
+    if cookie:
+        return cookie
+    raise HTTPException(status_code=401, detail="missing bearer token")
 
 
 def current_session(
     authorization: str | None = Header(default=None),
+    palisade_session: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ) -> UserSession:
-    token = _bearer_token(authorization)
+    token = _bearer_token(authorization, palisade_session)
     sess = db.get(UserSession, token)
     if sess is None:
         raise HTTPException(status_code=401, detail="invalid session")

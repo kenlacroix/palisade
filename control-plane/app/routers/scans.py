@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Path, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -8,7 +8,7 @@ from .. import alerting, config, queue
 from ..auth import require_agent
 from ..db import get_db
 from ..ingest import Report, ingest_reports
-from ..models import Agent, Asset, Finding, Org
+from ..models import Agent, Asset, Finding, Org, Scan
 from ..schemas import ExternalScanResponse, FindingsRequest
 from ..tasks import scan_external_assets, triage_findings
 from ..tenancy import current_org, require_role
@@ -43,6 +43,25 @@ def ingest_findings(
     agent: Agent = Depends(require_agent),
     db: Session = Depends(get_db),
 ) -> Response:
+    # The agent only authenticates itself; the scan_id and asset_ids in the body
+    # are attacker-controllable. Bind both to the agent's org so a compromised
+    # agent can't attach findings to another tenant's scan or assets. (RLS backs
+    # this on Postgres; the explicit checks also cover the SQLite path.)
+    scan = db.get(Scan, scan_id)
+    if scan is None or scan.org_id != agent.org_id:
+        raise HTTPException(status_code=404, detail="scan not found")
+    asset_ids = {fr.asset_id for fr in req.findings}
+    if asset_ids:
+        owned = set(
+            db.execute(
+                select(Asset.id).where(
+                    Asset.org_id == agent.org_id, Asset.id.in_(asset_ids)
+                )
+            ).scalars().all()
+        )
+        if asset_ids - owned:
+            raise HTTPException(status_code=400, detail="unknown asset for this org")
+
     reports = [
         Report(
             asset_id=fr.asset_id,
