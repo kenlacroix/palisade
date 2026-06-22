@@ -61,9 +61,14 @@ services:
       PALISADE_DEMO_USER_PASSWORD: ${PALISADE_DEMO_USER_PASSWORD:-palisade}
       PALISADE_SESSION_TTL_S: ${PALISADE_SESSION_TTL_S:-604800}
       PALISADE_SIGNING_KEY: ${PALISADE_SIGNING_KEY:-}
+      # Evidence/CA-key at-rest encryption; required for boot on a hardened
+      # (production) deploy or preflight refuses to start.
+      PALISADE_EVIDENCE_KEK: ${PALISADE_EVIDENCE_KEK:-}
       PALISADE_REQUIRE_MTLS: ${PALISADE_REQUIRE_MTLS:-}
       PALISADE_MTLS_HEADER: ${PALISADE_MTLS_HEADER:-x-client-cert}
       PALISADE_MTLS_CERT_DAYS: ${PALISADE_MTLS_CERT_DAYS:-397}
+      # Responsible-scanning scope; empty is deny-all in production.
+      PALISADE_PERIMETER_SCOPE_ALLOWLIST: ${PALISADE_PERIMETER_SCOPE_ALLOWLIST:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PALISADE_SEED_DEMO: ${PALISADE_SEED_DEMO:-}
       PALISADE_DEMO_MODE: ${PALISADE_DEMO_MODE:-}
@@ -91,6 +96,10 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PALISADE_TRIAGE_MODEL: ${PALISADE_TRIAGE_MODEL:-claude-haiku-4-5-20251001}
+      # Worker scans the perimeter and seals finding evidence at rest, so it
+      # needs the same encryption key and scan scope as the api.
+      PALISADE_EVIDENCE_KEK: ${PALISADE_EVIDENCE_KEK:-}
+      PALISADE_PERIMETER_SCOPE_ALLOWLIST: ${PALISADE_PERIMETER_SCOPE_ALLOWLIST:-}
     depends_on:
       postgres:
         condition: service_healthy
