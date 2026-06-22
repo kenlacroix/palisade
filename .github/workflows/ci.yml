@@ -48,6 +48,26 @@ jobs:
           npm run lint
           npm run format:check
 
+  web:
+    name: Web (test + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+
   agent:
     name: Agent (Go)
     runs-on: ubuntu-latest
