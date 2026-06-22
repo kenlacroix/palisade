@@ -21,6 +21,18 @@ class EnrollRequest(BaseModel):
     host: HostInfo
 
 
+class EnrollTokenCreate(BaseModel):
+    label: str = ""
+
+
+class EnrollTokenRow(BaseModel):
+    token: str
+    label: str
+    expires_at: str | None = None
+    used_at: str | None = None
+    created_at: str | None = None
+
+
 class EnrollResponse(BaseModel):
     agent_id: str
     agent_secret: str

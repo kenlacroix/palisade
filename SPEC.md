@@ -113,8 +113,10 @@ alerting all live server-side.
 **0. Enroll (once).** `POST /v1/agents/enroll {token, hostinfo}` → server
 validates a single-use token, joins the agent to the token's org, and returns
 `agent_id` + `agent_secret` **and** an mTLS client cert (`client_cert_pem`,
-`client_key_pem`, `ca_cert_pem`) issued by the internal CA (15-min token expiry
-is not yet enforced). Over https the agent presents the client cert for mutual
+`client_key_pem`, `ca_cert_pem`) issued by the internal CA. Admin-minted enroll
+tokens (`POST /v1/agents/enroll-tokens`) are single-use and expire after
+`PALISADE_ENROLL_TOKEN_TTL_S` (default 15 min); env-seeded bootstrap tokens
+never expire. Over https the agent presents the client cert for mutual
 TLS; over plaintext http it falls back to `Authorization: Bearer <agent_secret>`.
 
 **1. Heartbeat (the clock).** Every ~30s `POST /v1/agents/{id}/heartbeat
@@ -281,6 +283,7 @@ GET  /v1/assets                                       -> list
 GET  /v1/findings?status=open&severity=critical       -> list
 POST /v1/findings/{id}/mute        {reason,ttl}       -> finding   (member+)
 POST /v1/rescan                                       -> nudge agents (member+)
+POST /v1/agents/enroll-tokens      {label}            -> single-use token + expiry (admin+)
 GET  /v1/posture/summary                              -> score + counts + trend30d
 GET  /v1/detections                                   -> catalog rows
 POST /v1/detections                {detection}        -> {id, version}  (admin+)
@@ -295,8 +298,9 @@ GET/POST/PATCH/DELETE /v1/alert-rules[/{id}]                     (admin+ to muta
 > and an mTLS client cert (`client_cert_pem`/`client_key_pem`/`ca_cert_pem`)
 > from the internal CA. The agent uses mTLS over https and the bearer over http;
 > the control plane verifies the proxy-forwarded client cert against the CA and
-> can require it via `PALISADE_REQUIRE_MTLS`. Tokens are single-use but not yet
-> 15-min-expiring.
+> can require it via `PALISADE_REQUIRE_MTLS`. Enroll tokens are single-use;
+> admin-minted ones expire after `PALISADE_ENROLL_TOKEN_TTL_S` (default 15 min),
+> env-seeded bootstrap tokens never expire.
 
 ---
 

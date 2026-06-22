@@ -181,12 +181,15 @@ class EnrollToken(Base):
     __tablename__ = "enroll_token"
 
     # Single-use: a token may mint exactly one agent. used_at/agent_id record it.
+    # expires_at bounds the enrollment window for admin-minted tokens; env-seeded
+    # bootstrap tokens leave it null and never expire.
     token: Mapped[str] = mapped_column(String, primary_key=True)
     org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), default=DEMO_ORG_ID)
     label: Mapped[str] = mapped_column(String, default="")
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     agent_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 # --- alerting (M3) ---
