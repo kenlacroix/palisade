@@ -11,7 +11,7 @@
 [![Web: React + TS](https://img.shields.io/badge/web-React%20%2B%20TS-61DAFB?logo=react&logoColor=white)](web/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-**[trypalisade.dev](https://trypalisade.dev)** · [Live demo](#try-it-in-one-command) · [Quickstart](#quickstart-zero-infra-sqlite) · [Architecture](#architecture)
+**[trypalisade.dev](https://trypalisade.dev)** · [Live demo](https://app.trypalisade.dev) · [Quickstart](#quickstart-zero-infra-sqlite) · [Architecture](#architecture) · [Design decisions](docs/design-decisions.md)
 
 ![Palisade demo](docs/screenshots/demo.gif)
 
@@ -52,6 +52,13 @@ demo), and all `/v1` read endpoints are scoped to your active org with role-base
 access (owner/admin/member/viewer).
 
 ## Try it in one command
+
+> **Just want to click around?** The same build is live, read-only, at
+> **[app.trypalisade.dev](https://app.trypalisade.dev)** — log in as
+> `demo@palisade.local` / `palisade`. The control plane is home-hosted behind a
+> Cloudflare Tunnel on intentionally-disposable demo data
+> (see [`control-plane/deploy/README.md`](control-plane/deploy/README.md) →
+> *Blast radius & isolation*).
 
 The fastest way to see the whole product running in your own environment. Brings
 up the control plane, web UI, Postgres, and an agent that auto-enrolls and scans

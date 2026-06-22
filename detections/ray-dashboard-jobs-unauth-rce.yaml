@@ -1,0 +1,33 @@
+id: ray-dashboard-jobs-unauth-rce
+title: Ray Dashboard jobs API missing auth (ShadowRay)
+cve: CVE-2023-48022
+cvss: 9.8
+severity: critical
+category: ai-infra
+engine: nuclei
+match:
+  service: ray
+  versions: "*"
+# Exposure detection: the Ray Dashboard / Jobs API ships with no authentication,
+# so anyone who can reach it can submit jobs and gain RCE on the cluster. The CVE
+# is disputed upstream (treated as intended behaviour), so exposure is the
+# control. Non-destructive: we read the unauthenticated /api/version banner only;
+# no job is submitted.
+http:
+  - method: GET
+    path: /api/version
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: body
+        words: ['"ray_version"']
+remediation: |
+  Never expose the Ray Dashboard / Jobs API (default :8265) to untrusted
+  networks. Bind it to localhost, require an authenticating proxy, and apply
+  network isolation between the dashboard and any reachable client.
+references:
+  - https://nvd.nist.gov/vuln/detail/CVE-2023-48022
+  - https://www.oligo.security/blog/shadowray
+signature: stub
