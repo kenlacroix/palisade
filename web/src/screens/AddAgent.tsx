@@ -1,10 +1,10 @@
 import { mintEnrollToken, useApi } from "../api.ts";
 import { Card } from "../ui.tsx";
 
-// Read-only demo can't mint a token (POST is blocked on the demo org), so we
-// show a non-runnable placeholder rather than a real-looking token — a copied
-// demo command then can't half-work (401) against the hosted API.
+// Non-runnable placeholder shown in the read-only demo preview — a copied demo
+// command can't half-work (401) against the hosted API.
 const DEMO_TOKEN = "<your-enroll-token>";
+const REPO_URL = "https://github.com/kenlacroix/palisade";
 
 function expiryNote(expiresAt: string | null): string {
   if (!expiresAt) return "single use";
@@ -12,12 +12,60 @@ function expiryNote(expiresAt: string | null): string {
   return `expires in ${mins} min · single use`;
 }
 
-export default function AddAgent({ demoMode = false }: { demoMode?: boolean }) {
-  const { data, error, loading, refetch } = useApi(
-    () => (demoMode ? Promise.resolve(null) : mintEnrollToken()),
-    [demoMode],
+// Read-only demo: enrolling is blocked on the demo org, so instead of a dead
+// form we preview the onboarding command and route to the self-contained
+// `make demo`, which runs the real enroll/scan/finding loop on the user's own
+// machine against a bundled target.
+function DemoAddAgent() {
+  return (
+    <div className="space-y-5">
+      <h1 className="text-2xl font-semibold tracking-tight">Add an agent</h1>
+
+      <Card className="space-y-4 p-6 text-sm">
+        <p className="text-slate-300">
+          Onboarding is one command — install the agent on a host and enroll it
+          against your control plane:
+        </p>
+        <pre className="overflow-x-auto rounded-lg bg-ink-900 p-4 font-mono text-xs text-slate-400">
+          <span className="text-slate-500"># preview — enrolling is disabled in the read-only demo</span>{"\n"}
+          curl -fsSL https://trypalisade.dev/install | sh \{"\n"}
+          {"  "}&amp;&amp; palisade enroll --token{" "}
+          <span className="text-slate-300">{DEMO_TOKEN}</span> --server https://api.trypalisade.dev
+        </pre>
+
+        <div className="rounded-lg border border-ink-700 bg-ink-900/50 p-4">
+          <p className="text-slate-400">
+            <span className="font-medium text-slate-300">Want to run it for real?</span>{" "}
+            Spin up the whole stack — control plane, web UI, and a live agent that
+            discovers and scans a bundled vulnerable target — on your own machine.
+            Nothing leaves your host.
+          </p>
+          <pre className="mt-3 overflow-x-auto rounded-lg bg-ink-900 p-3 font-mono text-xs text-slate-200">
+            <span className="text-slate-500">$ </span>make demo
+            {"   "}<span className="text-slate-500"># http://localhost:8080</span>
+          </pre>
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener"
+            className="mt-3 inline-block rounded-md border border-ink-700 px-3 py-1.5 text-slate-300 hover:border-ink-500"
+          >
+            Get it on GitHub →
+          </a>
+        </div>
+      </Card>
+
+      <Card className="p-4 text-sm text-slate-400">
+        <span className="font-medium text-slate-300">No-exfil by default.</span> Detections run on the
+        agent; only normalized findings leave your network. Raw responses stay local unless you opt in.
+      </Card>
+    </div>
   );
-  const token = demoMode ? DEMO_TOKEN : data?.token;
+}
+
+function RealAddAgent() {
+  const { data, error, loading, refetch } = useApi(() => mintEnrollToken(), []);
+  const token = data?.token;
 
   return (
     <div className="space-y-5">
@@ -31,27 +79,23 @@ export default function AddAgent({ demoMode = false }: { demoMode?: boolean }) {
               <span className="text-slate-500">$ </span>curl -fsSL https://trypalisade.dev/install | sh \{"\n"}
               {"    "}&amp;&amp; palisade enroll --token{" "}
               <span className="text-accent">
-                {demoMode ? token : loading ? "generating…" : error ? "—" : token}
+                {loading ? "generating…" : error ? "—" : token}
               </span>
               {" "}--server https://api.trypalisade.dev
             </pre>
             <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
-              {demoMode ? (
-                <span>Read-only demo — enrolling is disabled. Deploy your own Palisade (or sign in to a workspace) and mint a real token under <span className="text-slate-300">Add agent</span>.</span>
-              ) : error ? (
+              {error ? (
                 <span className="text-rose-400">Could not mint a token: {error}</span>
               ) : (
                 <span>{expiryNote(data?.expires_at ?? null)}</span>
               )}
-              {!demoMode && (
-                <button
-                  onClick={refetch}
-                  disabled={loading}
-                  className="rounded-md border border-ink-700 px-2 py-1 text-slate-300 hover:border-ink-500 disabled:opacity-50"
-                >
-                  Regenerate
-                </button>
-              )}
+              <button
+                onClick={refetch}
+                disabled={loading}
+                className="rounded-md border border-ink-700 px-2 py-1 text-slate-300 hover:border-ink-500 disabled:opacity-50"
+              >
+                Regenerate
+              </button>
             </div>
           </li>
           <li className="flex items-center gap-3 text-slate-400">
@@ -73,4 +117,8 @@ export default function AddAgent({ demoMode = false }: { demoMode?: boolean }) {
       </Card>
     </div>
   );
+}
+
+export default function AddAgent({ demoMode = false }: { demoMode?: boolean }) {
+  return demoMode ? <DemoAddAgent /> : <RealAddAgent />;
 }
