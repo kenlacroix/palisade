@@ -198,7 +198,8 @@ scheduling, matching, dedupe, AI triage, alerting, multi-tenant storage.
 ### 5.7 Alerting (implemented)
 - Channels: Telegram, email, generic webhook. Channel secrets redacted on read.
 - Rules: `min_severity` threshold + `on_events` (`new` | `regressed`) → channel,
-  plus per-finding mute (ttl). Quiet hours not yet implemented.
+  plus per-finding mute (ttl). Per-rule quiet hours (start/end/tz) defer matching
+  alerts; the scheduler releases them when the window closes (migration 0007).
 - Alert history table; delivery in a background task.
 
 ---

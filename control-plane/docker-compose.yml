@@ -2,7 +2,8 @@
 # (laptop, Proxmox, VPS) — only the .env values change. Copy .env.example to
 # .env and `docker compose up --build`.
 #
-# TODO(prod, SPEC section 11): Postgres + Row-Level Security keyed on org_id.
+# Postgres Row-Level Security keyed on org_id is enforced from migration 0003
+# (SPEC section 11); CI exercises the RLS path against this postgres:16 service.
 services:
   postgres:
     image: postgres:16
