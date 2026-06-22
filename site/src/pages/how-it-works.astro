@@ -148,24 +148,40 @@ const steps = [
   <section class="border-b border-ink-800 py-20">
     <div class="container-x">
       <h2 class="text-2xl font-semibold tracking-tight text-white">
-        Run it yourself (Quickstart)
+        Run it yourself
       </h2>
       <p class="prose-muted mt-4 max-w-2xl">
-        Zero infra, sqlite-backed. Requires Go 1.22+, Python 3.12, and Node 18+.
+        One command brings up the full stack plus a live agent that discovers,
+        scans, and reports findings — all on your machine. The agent scans a
+        bundled, deliberately-vulnerable target, not your network, so nothing
+        leaves your host. Requires Docker.
       </p>
 
-      <h3 class="mt-8 text-lg font-medium text-white">Control plane</h3>
+      <h3 class="mt-8 text-lg font-medium text-white">One-command demo</h3>
+      <pre class="mt-3 overflow-x-auto rounded-lg border border-ink-700 bg-ink-900 p-4 text-sm font-mono text-slate-300"><code>make demo        # full stack + live agent loop -> http://localhost:8080
+make demo-down   # stop and wipe all demo data (docker compose down -v)</code></pre>
+      <p class="prose-muted mt-3 max-w-2xl text-sm">
+        Self-contained and ephemeral: tear-down removes every container and
+        volume, so each run starts clean. Nothing touches the hosted demo.
+      </p>
+
+      <h3 class="mt-10 text-lg font-medium text-white">Prefer to run the pieces? (zero infra, sqlite)</h3>
+      <p class="prose-muted mt-2 max-w-2xl text-sm">
+        Requires Go 1.22+, Python 3.12, and Node 18+.
+      </p>
+
+      <h4 class="mt-6 text-base font-medium text-slate-200">Control plane</h4>
       <pre class="mt-3 overflow-x-auto rounded-lg border border-ink-700 bg-ink-900 p-4 text-sm font-mono text-slate-300"><code>make venv
 make migrate
 cd control-plane && PALISADE_ENROLL_TOKENS=PLS-DEMO ./.venv/bin/uvicorn app.main:app --reload</code></pre>
 
-      <h3 class="mt-8 text-lg font-medium text-white">Web UI</h3>
+      <h4 class="mt-6 text-base font-medium text-slate-200">Web UI</h4>
       <pre class="mt-3 overflow-x-auto rounded-lg border border-ink-700 bg-ink-900 p-4 text-sm font-mono text-slate-300"><code>cd web && npm install && npm run dev</code></pre>
 
-      <h3 class="mt-8 text-lg font-medium text-white">Or run it in Docker</h3>
+      <h4 class="mt-6 text-base font-medium text-slate-200">Or run it in Docker</h4>
       <pre class="mt-3 overflow-x-auto rounded-lg border border-ink-700 bg-ink-900 p-4 text-sm font-mono text-slate-300"><code>cd control-plane && cp .env.example .env && docker compose up --build</code></pre>
 
-      <h3 class="mt-8 text-lg font-medium text-white">Full loop smoke test</h3>
+      <h4 class="mt-6 text-base font-medium text-slate-200">Full loop smoke test</h4>
       <pre class="mt-3 overflow-x-auto rounded-lg border border-ink-700 bg-ink-900 p-4 text-sm font-mono text-slate-300"><code>make smoke</code></pre>
     </div>
   </section>
