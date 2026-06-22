@@ -28,9 +28,7 @@ INLINE_DETECTIONS: list[dict[str, Any]] = [
                 "matchers": [{"type": "dsl", "dsl": ["duration>=5"]}],
             }
         ],
-        "remediation": (
-            "Upgrade LiteLLM to >=1.40.2. Restrict /key/* to authenticated admin."
-        ),
+        "remediation": ("Upgrade LiteLLM to >=1.40.2. Restrict /key/* to authenticated admin."),
         "references": ["https://github.com/BerriAI/litellm/security/advisories"],
         "signature": "stub",
         "cvss": 9.8,
@@ -49,7 +47,7 @@ INLINE_DETECTIONS: list[dict[str, Any]] = [
                 "path": "/api/users",
                 "matchers": [
                     {"type": "status", "status": [200]},
-                    {"type": "word", "words": ["\"username\"", "\"isActive\""]},
+                    {"type": "word", "words": ['"username"', '"isActive"']},
                 ],
             }
         ],

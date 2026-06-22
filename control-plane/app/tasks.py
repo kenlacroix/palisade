@@ -1,11 +1,12 @@
 """Background work bodies, transport-agnostic. Each opens its own session and
 never raises, so it runs identically under an Arq worker (REDIS_URL set) or an
 in-process FastAPI BackgroundTask (the fallback). See queue.enqueue."""
+
 from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
@@ -66,9 +67,11 @@ def scan_external_assets(org_id: str) -> None:
     db = SessionLocal()
     try:
         _set_rls_org(db, org_id)
-        assets = db.execute(
-            select(Asset).where(Asset.org_id == org_id, Asset.exposure == "external")
-        ).scalars().all()
+        assets = (
+            db.execute(select(Asset).where(Asset.org_id == org_id, Asset.exposure == "external"))
+            .scalars()
+            .all()
+        )
         if not assets:
             return
         detections = db.execute(select(Detection)).scalars().all()
@@ -100,7 +103,7 @@ def scan_external_assets(org_id: str) -> None:
             org_id=org_id,
             agent_id=None,  # control-plane origin
             status="finished",
-            finished_at=datetime.now(timezone.utc),
+            finished_at=datetime.now(UTC),
             assets_count=len(targets),
             targets=targets,
         )

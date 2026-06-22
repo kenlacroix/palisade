@@ -46,13 +46,13 @@ type HeartbeatResponse struct {
 
 // Job is a unit of work. Payload is decoded per Type.
 type Job struct {
-	JobID   string `json:"job_id"`
-	Type    string `json:"type"` // "discover" | "scan"
-	Payload Job_   `json:"payload"`
+	JobID   string     `json:"job_id"`
+	Type    string     `json:"type"` // "discover" | "scan"
+	Payload JobPayload `json:"payload"`
 }
 
-// Job_ is the union payload for discover and scan jobs.
-type Job_ struct {
+// JobPayload is the union payload for discover and scan jobs.
+type JobPayload struct {
 	// discover
 	Scope *Scope `json:"scope,omitempty"`
 	// scan

@@ -23,11 +23,14 @@ function DemoAddAgent() {
 
       <Card className="space-y-4 p-6 text-sm">
         <p className="text-slate-300">
-          Onboarding is one command — install the agent on a host and enroll it
-          against your control plane:
+          Onboarding is one command — install the agent on a host and enroll it against your control
+          plane:
         </p>
         <pre className="overflow-x-auto rounded-lg bg-ink-900 p-4 font-mono text-xs text-slate-400">
-          <span className="text-slate-500"># preview — enrolling is disabled in the read-only demo</span>{"\n"}
+          <span className="text-slate-500">
+            # preview — enrolling is disabled in the read-only demo
+          </span>
+          {"\n"}
           curl -fsSL https://trypalisade.dev/install | sh \{"\n"}
           {"  "}&amp;&amp; palisade enroll --token{" "}
           <span className="text-slate-300">{DEMO_TOKEN}</span> --server https://api.trypalisade.dev
@@ -35,14 +38,14 @@ function DemoAddAgent() {
 
         <div className="rounded-lg border border-ink-700 bg-ink-900/50 p-4">
           <p className="text-slate-400">
-            <span className="font-medium text-slate-300">Want to run it for real?</span>{" "}
-            Spin up the whole stack — control plane, web UI, and a live agent that
-            discovers and scans a bundled vulnerable target — on your own machine.
-            Nothing leaves your host.
+            <span className="font-medium text-slate-300">Want to run it for real?</span> Spin up the
+            whole stack — control plane, web UI, and a live agent that discovers and scans a bundled
+            vulnerable target — on your own machine. Nothing leaves your host.
           </p>
           <pre className="mt-3 overflow-x-auto rounded-lg bg-ink-900 p-3 font-mono text-xs text-slate-200">
             <span className="text-slate-500">$ </span>make demo
-            {"   "}<span className="text-slate-500"># http://localhost:8080</span>
+            {"   "}
+            <span className="text-slate-500"># http://localhost:8080</span>
           </pre>
           <a
             href={REPO_URL}
@@ -56,8 +59,9 @@ function DemoAddAgent() {
       </Card>
 
       <Card className="p-4 text-sm text-slate-400">
-        <span className="font-medium text-slate-300">No-exfil by default.</span> Detections run on the
-        agent; only normalized findings leave your network. Raw responses stay local unless you opt in.
+        <span className="font-medium text-slate-300">No-exfil by default.</span> Detections run on
+        the agent; only normalized findings leave your network. Raw responses stay local unless you
+        opt in.
       </Card>
     </div>
   );
@@ -76,12 +80,11 @@ function RealAddAgent() {
           <li>
             <div className="mb-2 text-slate-300">1. Run on the host you want to monitor:</div>
             <pre className="overflow-x-auto rounded-lg bg-ink-900 p-4 font-mono text-xs text-slate-200">
-              <span className="text-slate-500">$ </span>curl -fsSL https://trypalisade.dev/install | sh \{"\n"}
+              <span className="text-slate-500">$ </span>curl -fsSL https://trypalisade.dev/install |
+              sh \{"\n"}
               {"    "}&amp;&amp; palisade enroll --token{" "}
-              <span className="text-accent">
-                {loading ? "generating…" : error ? "—" : token}
-              </span>
-              {" "}--server https://api.trypalisade.dev
+              <span className="text-accent">{loading ? "generating…" : error ? "—" : token}</span>{" "}
+              --server https://api.trypalisade.dev
             </pre>
             <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
               {error ? (
@@ -112,8 +115,9 @@ function RealAddAgent() {
       </Card>
 
       <Card className="p-4 text-sm text-slate-400">
-        <span className="font-medium text-slate-300">No-exfil by default.</span> Detections run on the
-        agent; only normalized findings leave your network. Raw responses stay local unless you opt in.
+        <span className="font-medium text-slate-300">No-exfil by default.</span> Detections run on
+        the agent; only normalized findings leave your network. Raw responses stay local unless you
+        opt in.
       </Card>
     </div>
   );

@@ -6,8 +6,8 @@ from __future__ import annotations
 import hashlib
 
 b = 256
-q = 2 ** 255 - 19
-L = 2 ** 252 + 27742317777372353535851937790883648493
+q = 2**255 - 19
+L = 2**252 + 27742317777372353535851937790883648493
 
 
 def _H(m: bytes) -> bytes:
@@ -82,28 +82,28 @@ def _bit(h, i):
 
 def _Hint(m):
     h = _H(m)
-    return sum(2 ** i * _bit(h, i) for i in range(2 * b))
+    return sum(2**i * _bit(h, i) for i in range(2 * b))
 
 
 def publickey(seed: bytes) -> bytes:
     h = _H(seed)
-    a = 2 ** (b - 2) + sum(2 ** i * _bit(h, i) for i in range(3, b - 2))
+    a = 2 ** (b - 2) + sum(2**i * _bit(h, i) for i in range(3, b - 2))
     A = _scalarmult(B, a)
     return _encodepoint(A)
 
 
 def sign(message: bytes, seed: bytes) -> bytes:
     h = _H(seed)
-    a = 2 ** (b - 2) + sum(2 ** i * _bit(h, i) for i in range(3, b - 2))
+    a = 2 ** (b - 2) + sum(2**i * _bit(h, i) for i in range(3, b - 2))
     pk = _encodepoint(_scalarmult(B, a))
-    r = _Hint(h[b // 8:b // 4] + message)
+    r = _Hint(h[b // 8 : b // 4] + message)
     R = _scalarmult(B, r)
     S = (r + _Hint(_encodepoint(R) + pk + message) * a) % L
     return _encodepoint(R) + _encodeint(S)
 
 
 def _decodeint(s):
-    return sum(2 ** i * _bit(s, i) for i in range(0, b))
+    return sum(2**i * _bit(s, i) for i in range(0, b))
 
 
 def _isoncurve(P):
@@ -112,7 +112,7 @@ def _isoncurve(P):
 
 
 def _decodepoint(s):
-    y = sum(2 ** i * _bit(s, i) for i in range(0, b - 1))
+    y = sum(2**i * _bit(s, i) for i in range(0, b - 1))
     x = _xrecover(y)
     if x & 1 != _bit(s, b - 1):
         x = q - x
@@ -126,9 +126,9 @@ def verify(message: bytes, signature: bytes, public: bytes) -> bool:
     if len(signature) != b // 4 or len(public) != b // 8:
         return False
     try:
-        R = _decodepoint(signature[:b // 8])
+        R = _decodepoint(signature[: b // 8])
         A = _decodepoint(public)
-        S = _decodeint(signature[b // 8:b // 4])
+        S = _decodeint(signature[b // 8 : b // 4])
     except Exception:
         return False
     h = _Hint(_encodepoint(R) + public + message)

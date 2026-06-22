@@ -2,6 +2,7 @@
 the session and persistence. Every sender swallows its exceptions and returns
 (ok, error) so a bad channel config can never crash the delivery worker.
 """
+
 from __future__ import annotations
 
 import smtplib

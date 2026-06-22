@@ -22,12 +22,22 @@ export function Dot({ severity }: { severity: Severity }) {
 
 export function SevBadge({ severity }: { severity: Severity }) {
   return (
-    <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium uppercase tracking-wide ring-1 ${SEV_BG[severity]}`}>
+    <span
+      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium uppercase tracking-wide ring-1 ${SEV_BG[severity]}`}
+    >
       {severity}
     </span>
   );
 }
 
-export function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-ink-600 bg-ink-800 ${className}`}>{children}</div>;
+export function Card({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`rounded-xl border border-ink-600 bg-ink-800 ${className}`}>{children}</div>
+  );
 }

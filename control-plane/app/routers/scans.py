@@ -54,10 +54,10 @@ def ingest_findings(
     if asset_ids:
         owned = set(
             db.execute(
-                select(Asset.id).where(
-                    Asset.org_id == agent.org_id, Asset.id.in_(asset_ids)
-                )
-            ).scalars().all()
+                select(Asset.id).where(Asset.org_id == agent.org_id, Asset.id.in_(asset_ids))
+            )
+            .scalars()
+            .all()
         )
         if asset_ids - owned:
             raise HTTPException(status_code=400, detail="unknown asset for this org")
@@ -94,6 +94,8 @@ def ingest_findings(
     alert_ids.extend(alerting.release_due_deferred(db, agent.org_id))
     if alert_ids:
         db.commit()
-        queue.enqueue(background, "deliver_alerts", alerting.deliver_pending, agent.org_id, alert_ids)
+        queue.enqueue(
+            background, "deliver_alerts", alerting.deliver_pending, agent.org_id, alert_ids
+        )
 
     return Response(status_code=202)

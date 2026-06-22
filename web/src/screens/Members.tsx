@@ -110,7 +110,9 @@ export default function Members() {
           </tbody>
         </table>
         {error ? (
-          <div className="px-4 py-6 text-center text-sm text-red-400">Failed to load members: {error}</div>
+          <div className="px-4 py-6 text-center text-sm text-red-400">
+            Failed to load members: {error}
+          </div>
         ) : rows.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-slate-500">
             {loading ? "Loading members…" : "No members yet."}
@@ -120,7 +122,9 @@ export default function Members() {
       </Card>
 
       <Card className="p-5">
-        <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Add member</div>
+        <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Add member
+        </div>
         <form onSubmit={onAdd} className="space-y-3">
           <div className="flex items-center gap-2">
             <input

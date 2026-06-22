@@ -54,7 +54,7 @@ func TestNextjsBypassPatched(t *testing.T) {
 
 // no middleware gate: root is already 200, so there is nothing to bypass.
 func TestNextjsBypassNoGate(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()

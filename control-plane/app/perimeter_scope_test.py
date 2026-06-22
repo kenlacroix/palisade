@@ -5,6 +5,7 @@ dev/demo but DENIES in production, plus exact-host / domain-suffix / CIDR
 matching when entries are present. Run: python -m app.perimeter_scope_test
 or pytest.
 """
+
 from __future__ import annotations
 
 import os
@@ -71,12 +72,16 @@ def test_insecure_flag_reopens_in_postgres():
 def test_allowlist_matching():
     snap = _snapshot()
     try:
-        _set(db="postgresql+psycopg://u:p@h/db", allow="api.acme.com, acme.io, 10.0.0.0/24", insecure=False)
-        assert perimeter.host_in_scope("api.acme.com") is True       # exact
-        assert perimeter.host_in_scope("sub.acme.io") is True        # parent-domain suffix
-        assert perimeter.host_in_scope("10.0.0.5") is True           # CIDR membership
+        _set(
+            db="postgresql+psycopg://u:p@h/db",
+            allow="api.acme.com, acme.io, 10.0.0.0/24",
+            insecure=False,
+        )
+        assert perimeter.host_in_scope("api.acme.com") is True  # exact
+        assert perimeter.host_in_scope("sub.acme.io") is True  # parent-domain suffix
+        assert perimeter.host_in_scope("10.0.0.5") is True  # CIDR membership
         assert perimeter.host_in_scope("evil.example.com") is False  # not listed
-        assert perimeter.host_in_scope("10.0.1.5") is False          # outside CIDR
+        assert perimeter.host_in_scope("10.0.1.5") is False  # outside CIDR
     finally:
         _restore(snap)
 

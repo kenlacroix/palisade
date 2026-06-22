@@ -7,9 +7,10 @@ deterministic (no randomness) and timezone-aware, matching models._now(). Scores
 are reconstructed with the same weights as app.snapshots so the Dashboard
 sparkline, posture summary, and stored snapshots all agree.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -38,7 +39,7 @@ _ACTOR = "demo@palisade.local"
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _score(penalty: int) -> int:
@@ -144,7 +145,10 @@ def seed_demo(db: Session) -> None:
             "high",
             "regressed",
             "plugin-traversal",
-            {"request": "GET /public/plugins/alertlist/../../../../etc/passwd", "note": "read /etc/passwd via plugin path traversal"},
+            {
+                "request": "GET /public/plugins/alertlist/../../../../etc/passwd",
+                "note": "read /etc/passwd via plugin path traversal",
+            },
             9,
             0,
             None,
@@ -155,7 +159,10 @@ def seed_demo(db: Session) -> None:
             "critical",
             "muted",
             "cli-file-read",
-            {"request": "java -jar jenkins-cli.jar @/etc/passwd", "note": "arbitrary file read via CLI arg expansion"},
+            {
+                "request": "java -jar jenkins-cli.jar @/etc/passwd",
+                "note": "arbitrary file read via CLI arg expansion",
+            },
             18,
             3,
             None,
@@ -166,7 +173,10 @@ def seed_demo(db: Session) -> None:
             "high",
             "resolved",
             "admin-exposed",
-            {"request": "GET /admin", "note": "admin UI reachable without auth (patched in upgrade)"},
+            {
+                "request": "GET /admin",
+                "note": "admin UI reachable without auth (patched in upgrade)",
+            },
             26,
             6,
             None,
@@ -270,8 +280,8 @@ def seed_demo(db: Session) -> None:
 
     # Historical alerts for the active high/critical findings (sent).
     alert_findings = [
-        (findings[0], "new", 21),       # litellm critical
-        (findings[1], "new", 14),       # nextjs high
+        (findings[0], "new", 21),  # litellm critical
+        (findings[1], "new", 14),  # nextjs high
         (findings[2], "regressed", 2),  # grafana traversal regressed
     ]
     for f, event, days_ago in alert_findings:

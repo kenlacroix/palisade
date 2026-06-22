@@ -13,6 +13,7 @@ module exercises the signed path. The unsigned "stub" path is covered by
 app.smoke_test. ANTHROPIC_API_KEY is left unset so AI drafting 503s and triage
 no-ops.
 """
+
 from __future__ import annotations
 
 import os
@@ -26,6 +27,8 @@ _DEMO_SEED_B64 = "70kJtI1NajTd1yQXFHVRuBVQfc6P2CAtRroaLCmYYbY="
 os.environ["PALISADE_SIGNING_KEY"] = _DEMO_SEED_B64
 os.environ.pop("ANTHROPIC_API_KEY", None)
 os.environ.setdefault("PALISADE_ENROLL_TOKENS", "PLS-DEMO")
+
+from datetime import UTC
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -198,15 +201,19 @@ def test_signed_bundle_verifies_and_tamper_detected():
             assert r.status_code == 200, r.text
             b = r.json()
             assert b["signature"] not in ("", "stub"), b["signature"]
-            assert signing.verify_bundle(
-                b["version"], b["detections"], b["signature"], signing.DEMO_PUB_B64
-            ) is True
+            assert (
+                signing.verify_bundle(
+                    b["version"], b["detections"], b["signature"], signing.DEMO_PUB_B64
+                )
+                is True
+            )
 
             tampered = [dict(d) for d in b["detections"]]
             tampered[0]["remediation"] = tampered[0]["remediation"] + " TAMPERED"
-            assert signing.verify_bundle(
-                b["version"], tampered, b["signature"], signing.DEMO_PUB_B64
-            ) is False
+            assert (
+                signing.verify_bundle(b["version"], tampered, b["signature"], signing.DEMO_PUB_B64)
+                is False
+            )
     finally:
         _cleanup(db_path)
 
@@ -219,9 +226,7 @@ def test_seeded_cvss_present():
             agent_id, auth = _enroll(client)
             r = client.get("/v1/catalog/bundle?since=0", headers=auth)
             assert r.status_code == 200, r.text
-            det = next(
-                d for d in r.json()["detections"] if d["id"] == "litellm-proxy-preauth-sqli"
-            )
+            det = next(d for d in r.json()["detections"] if d["id"] == "litellm-proxy-preauth-sqli")
             assert det["cvss"] == 9.8, det
 
             r = client.get("/v1/detections", headers=_session(client))
@@ -420,9 +425,7 @@ def test_triage_noop_when_unconfigured():
     try:
         with client:
             _, finding_id = _ingest_finding(client)
-            r = client.get(
-                "/v1/findings?status=open&severity=critical", headers=_session(client)
-            )
+            r = client.get("/v1/findings?status=open&severity=critical", headers=_session(client))
             assert r.status_code == 200, r.text
             f = next(x for x in r.json()["findings"] if x["id"] == finding_id)
             assert f["triage_priority"] is None, f
@@ -494,7 +497,7 @@ def test_mint_enroll_token_requires_admin():
 
 
 def test_expired_enroll_token_rejected():
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from app.models import EnrollToken
 
@@ -506,7 +509,7 @@ def test_expired_enroll_token_rejected():
             # Backdate the expiry so the window has closed.
             with db_module.SessionLocal() as db:
                 row = db.get(EnrollToken, tok)
-                row.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+                row.expires_at = datetime.now(UTC) - timedelta(seconds=1)
                 db.commit()
 
             r = _enroll_with(client, tok)
@@ -519,7 +522,7 @@ def test_expired_enroll_token_rejected():
 
 
 def test_bootstrap_token_carries_ttl_and_rearms():
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from app.main import _bootstrap
     from app.models import EnrollToken
@@ -530,14 +533,14 @@ def test_bootstrap_token_carries_ttl_and_rearms():
         with db_module.SessionLocal() as db:
             row = db.get(EnrollToken, "PLS-DEMO")
             assert row is not None and row.expires_at is not None
-            backdated = datetime.now(timezone.utc) - timedelta(days=1)
+            backdated = datetime.now(UTC) - timedelta(days=1)
             row.expires_at = backdated
             db.commit()
         # A reboot re-arms the unused bootstrap token's expiry.
         _bootstrap()
         with db_module.SessionLocal() as db:
             row = db.get(EnrollToken, "PLS-DEMO")
-            assert _ensure_aware(row.expires_at) > datetime.now(timezone.utc)
+            assert _ensure_aware(row.expires_at) > datetime.now(UTC)
     finally:
         _cleanup(db_path)
 
@@ -644,19 +647,25 @@ def test_membership_lifecycle_and_audit():
             uid = _seed_user("alice@palisade.local")
 
             # Adding a non-existent user 404s.
-            r = client.post("/v1/members", json={"email": "ghost@x.io", "role": "member"}, headers=sess)
+            r = client.post(
+                "/v1/members", json={"email": "ghost@x.io", "role": "member"}, headers=sess
+            )
             assert r.status_code == 404, r.text
 
             # Add alice as a member.
             r = client.post(
-                "/v1/members", json={"email": "alice@palisade.local", "role": "member"}, headers=sess
+                "/v1/members",
+                json={"email": "alice@palisade.local", "role": "member"},
+                headers=sess,
             )
             assert r.status_code == 200, r.text
             assert r.json()["role"] == "member"
 
             # Duplicate add 409s.
             r = client.post(
-                "/v1/members", json={"email": "alice@palisade.local", "role": "member"}, headers=sess
+                "/v1/members",
+                json={"email": "alice@palisade.local", "role": "member"},
+                headers=sess,
             )
             assert r.status_code == 409, r.text
 

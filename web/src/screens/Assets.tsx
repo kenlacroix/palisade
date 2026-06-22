@@ -110,8 +110,12 @@ export default function Assets({ role }: { role: Role }) {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  {a.findings_critical > 0 && <span className="mr-2 text-red-400">⛔ {a.findings_critical}</span>}
-                  {a.findings_high > 0 && <span className="text-amber-400">⚠ {a.findings_high}</span>}
+                  {a.findings_critical > 0 && (
+                    <span className="mr-2 text-red-400">⛔ {a.findings_critical}</span>
+                  )}
+                  {a.findings_high > 0 && (
+                    <span className="text-amber-400">⚠ {a.findings_high}</span>
+                  )}
                   {a.findings_critical === 0 && a.findings_high === 0 && (
                     <span className="text-emerald-400">✓ clean</span>
                   )}
@@ -122,7 +126,9 @@ export default function Assets({ role }: { role: Role }) {
           </tbody>
         </table>
         {error ? (
-          <div className="px-4 py-6 text-center text-sm text-red-400">Failed to load assets: {error}</div>
+          <div className="px-4 py-6 text-center text-sm text-red-400">
+            Failed to load assets: {error}
+          </div>
         ) : rows.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-slate-500">
             {loading ? "Loading assets…" : "No assets yet — enroll an agent to start discovery."}

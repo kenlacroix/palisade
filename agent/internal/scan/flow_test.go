@@ -16,11 +16,11 @@ func flowServer() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("x-middleware-subrequest") != "" {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("admin dashboard"))
+			_, _ = w.Write([]byte("admin dashboard"))
 			return
 		}
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("login required"))
+		_, _ = w.Write([]byte("login required"))
 	}))
 }
 
@@ -61,7 +61,7 @@ func TestRunFlowConfirmed(t *testing.T) {
 
 func TestRunFlowNegative(t *testing.T) {
 	// Server that serves everyone 200 -> baseline is not gated, so no bypass.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()

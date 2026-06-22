@@ -31,7 +31,9 @@ export default function Login({ onAuthed }: { onAuthed: (session: Session) => vo
         </div>
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-slate-500">Email</label>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-slate-500">
+              Email
+            </label>
             <input
               type="email"
               value={email}
@@ -40,7 +42,9 @@ export default function Login({ onAuthed }: { onAuthed: (session: Session) => vo
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-slate-500">Password</label>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-slate-500">
+              Password
+            </label>
             <input
               type="password"
               value={password}

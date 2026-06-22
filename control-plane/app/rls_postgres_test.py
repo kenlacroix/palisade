@@ -11,6 +11,7 @@ Skipped unless PALISADE_TEST_DATABASE_URL points at Postgres (CI's
 integration-postgres job sets it). SQLite has no RLS, so there's nothing to
 assert there. Run:  python -m app.rls_postgres_test
 """
+
 from __future__ import annotations
 
 import os
@@ -113,10 +114,15 @@ def test_force_rls_isolates_app_role():
             asset = Asset(org_id=org, host="h", port=1, service="x")
             db.add(asset)
             db.flush()
-            db.add(Finding(
-                org_id=org, asset_id=asset.id, detection_id=det_id,
-                fingerprint=f"fp-{uuid.uuid4().hex}", status="open",
-            ))
+            db.add(
+                Finding(
+                    org_id=org,
+                    asset_id=asset.id,
+                    detection_id=det_id,
+                    fingerprint=f"fp-{uuid.uuid4().hex}",
+                    status="open",
+                )
+            )
             db.commit()
     with db_module.SessionLocal() as db:
         _set_rls_org(db, org_a)  # caller scoped to A only

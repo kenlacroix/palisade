@@ -1,0 +1,17 @@
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+# Depends(...) in argument defaults is the canonical FastAPI dependency-injection
+# idiom, not a mutable-default bug.
+ignore = ["B008"]
+
+[lint.per-file-ignores]
+# Reference Ed25519 implementation: single-letter names mirror the RFC 8032 math.
+"app/_ed25519.py" = ["E741", "N"]
+# Tests set os.environ before importing app modules (E402) and embed long
+# fixture/expectation strings (E501).
+"*_test.py" = ["E402", "E501"]
+# Seed data carries long human-readable rationale strings.
+"app/seed.py" = ["E501"]

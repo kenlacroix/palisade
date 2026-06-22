@@ -4,11 +4,13 @@ scale horizontally). Without it, work runs in an in-process BackgroundTask so
 dev/SQLite needs no Redis. If a Redis enqueue fails, we fall back rather than
 drop the work — at-least-once, never zero.
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from . import config
 

@@ -2,10 +2,11 @@
 ingest request's transaction (caller commits); deliver_pending runs in a
 BackgroundTask with its own session so network I/O never touches the request.
 """
+
 from __future__ import annotations
 
 import zoneinfo
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +22,7 @@ SECRET_KEYS = {"bot_token", "password", "username"}
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _parse_hhmm(s: str | None) -> time | None:
@@ -71,7 +72,7 @@ def quiet_end_utc(rule: AlertRule, now_utc: datetime) -> datetime | None:
         cand = end_today  # overnight window, early-morning tail ends today
     else:
         cand = end_today + timedelta(days=1)  # evening; ends tomorrow morning
-    return cand.astimezone(timezone.utc)
+    return cand.astimezone(UTC)
 
 
 def evaluate_and_enqueue(db: Session, org_id: str, finding: Finding, event: str) -> list[str]:
@@ -79,9 +80,13 @@ def evaluate_and_enqueue(db: Session, org_id: str, finding: Finding, event: str)
     now. Rules in quiet hours record an alert but withhold delivery: "suppress"
     drops it (status=suppressed); "defer" holds it (status=deferred) until
     release_due_deferred picks it up after the window ends. Caller commits."""
-    rules = db.execute(
-        select(AlertRule).where(AlertRule.org_id == org_id, AlertRule.enabled == True)  # noqa: E712
-    ).scalars().all()
+    rules = (
+        db.execute(
+            select(AlertRule).where(AlertRule.org_id == org_id, AlertRule.enabled == True)  # noqa: E712
+        )
+        .scalars()
+        .all()
+    )
 
     finding_rank = SEVERITY_RANK.get(finding.severity, 0)
     now = _now()
@@ -121,13 +126,17 @@ def release_due_deferred(db: Session, org_id: str) -> list[str]:
     their ids for delivery. Runs on each ingest/scan cycle, so deferred alerts
     go out on the first cycle after their quiet window closes. Caller commits."""
     now = _now()
-    rows = db.execute(
-        select(Alert).where(
-            Alert.org_id == org_id,
-            Alert.status == "deferred",
-            Alert.deferred_until <= now,
+    rows = (
+        db.execute(
+            select(Alert).where(
+                Alert.org_id == org_id,
+                Alert.status == "deferred",
+                Alert.deferred_until <= now,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     ids: list[str] = []
     for a in rows:
         a.status = "pending"

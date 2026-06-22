@@ -4,12 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import audit
-from ..netguard import safe_get
 from ..catalog import bundle_version
 from ..config import ANTHROPIC_API_KEY, DRAFT_MODEL
 from ..db import get_db
 from ..models import Detection, Org, User
-from ..tenancy import current_org, current_user, require_role
+from ..netguard import safe_get
 from ..schemas import (
     AcceptDetectionRequest,
     AcceptDetectionResponse,
@@ -17,6 +16,7 @@ from ..schemas import (
     DraftRequest,
     DraftResponse,
 )
+from ..tenancy import current_org, current_user, require_role
 
 router = APIRouter(prefix="/v1/detections", tags=["detections"])
 
@@ -43,9 +43,7 @@ def _fetch(url: str) -> str:
 
 
 @router.post("/draft", response_model=DraftResponse)
-def draft_from_cve_url(
-    body: DraftRequest, user: User = Depends(current_user)
-) -> DraftResponse:
+def draft_from_cve_url(body: DraftRequest, user: User = Depends(current_user)) -> DraftResponse:
     if not ANTHROPIC_API_KEY:
         raise HTTPException(
             status_code=503,
@@ -53,9 +51,10 @@ def draft_from_cve_url(
         )
 
     page = _fetch(body.cve_url)
-    prompt = (
-        f"Draft a Palisade detection from this CVE advisory.\n\nURL: {body.cve_url}\n\n"
-        + (f"Page content:\n{page}" if page else "(Could not fetch the page; use the URL and your knowledge.)")
+    prompt = f"Draft a Palisade detection from this CVE advisory.\n\nURL: {body.cve_url}\n\n" + (
+        f"Page content:\n{page}"
+        if page
+        else "(Could not fetch the page; use the URL and your knowledge.)"
     )
 
     try:

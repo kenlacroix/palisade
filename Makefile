@@ -5,7 +5,7 @@ ALEMBIC := cd $(CP) && .venv/bin/alembic
 
 .DEFAULT_GOAL := help
 
-.PHONY: help venv up down logs migrate revision check smoke integration test agent-build web demo demo-down
+.PHONY: help venv up down logs migrate revision check smoke integration test lint fmt agent-build web demo demo-down
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -43,6 +43,16 @@ test: ## Agent Go tests + control-plane smoke + live integration + detection val
 	$(MAKE) smoke
 	$(MAKE) integration
 	cd detections && .venv/bin/python validate.py
+
+lint: ## Lint all components (ruff + golangci-lint + eslint/prettier)
+	cd $(CP) && .venv/bin/ruff check app/ && .venv/bin/ruff format --check app/
+	cd agent && golangci-lint run ./...
+	cd web && npm run lint && npm run format:check
+
+fmt: ## Auto-format all components
+	cd $(CP) && .venv/bin/ruff check --fix app/ && .venv/bin/ruff format app/
+	cd agent && gofmt -s -w .
+	cd web && npm run format
 
 agent-build: ## Build the Go agent binary (agent/palisade)
 	cd agent && go build -o palisade ./cmd/palisade

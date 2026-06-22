@@ -9,6 +9,7 @@ structurally by the migration plus the dialect guard in read.list_detections.
 Run with:  python -m app.catalog_aggregate_test
 or:        pytest app/catalog_aggregate_test.py
 """
+
 from __future__ import annotations
 
 from app.api_test import _cleanup, _ingest_finding, _make_client, _session

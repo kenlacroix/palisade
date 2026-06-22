@@ -85,7 +85,7 @@ def _satisfies(asset_version: str, constraint: str) -> bool:
     for candidate in _OPERATORS:
         if constraint.startswith(candidate):
             op = candidate
-            operand = constraint[len(candidate):].strip()
+            operand = constraint[len(candidate) :].strip()
             break
 
     if not _is_version(operand):

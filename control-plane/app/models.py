@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     JSON,
@@ -15,7 +15,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
 
@@ -31,7 +31,7 @@ def _uuid() -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Org(Base):
@@ -121,9 +121,7 @@ class Finding(Base):
     __tablename__ = "finding"
     # Fingerprint uniqueness is scoped per org (migration 0011): a global unique
     # let one tenant's fingerprint collide with another's and overwrite it.
-    __table_args__ = (
-        Index("uq_finding_org_fingerprint", "org_id", "fingerprint", unique=True),
-    )
+    __table_args__ = (Index("uq_finding_org_fingerprint", "org_id", "fingerprint", unique=True),)
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), default=DEMO_ORG_ID)
@@ -205,7 +203,9 @@ class AlertChannel(Base):
     __tablename__ = "alert_channel"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True)
+    org_id: Mapped[str] = mapped_column(
+        String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True
+    )
     type: Mapped[str] = mapped_column(String)  # telegram|email|webhook
     name: Mapped[str] = mapped_column(String, default="")
     # type-specific delivery config, e.g. {"bot_token","chat_id"} / {"url"} /
@@ -219,7 +219,9 @@ class AlertRule(Base):
     __tablename__ = "alert_rule"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True)
+    org_id: Mapped[str] = mapped_column(
+        String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True
+    )
     name: Mapped[str] = mapped_column(String, default="")
     # Fire when a finding's severity is at least this rank. See SEVERITY_RANK.
     min_severity: Mapped[str] = mapped_column(String, default="high")
@@ -241,7 +243,9 @@ class Alert(Base):
     __tablename__ = "alert"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True)
+    org_id: Mapped[str] = mapped_column(
+        String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True
+    )
     finding_id: Mapped[str] = mapped_column(String, ForeignKey("finding.id"))
     rule_id: Mapped[str | None] = mapped_column(String, nullable=True)
     channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -262,7 +266,9 @@ class PostureSnapshot(Base):
     __table_args__ = (UniqueConstraint("org_id", "day", name="uq_snapshot_org_day"),)
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True)
+    org_id: Mapped[str] = mapped_column(
+        String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True
+    )
     # UTC calendar day, "YYYY-MM-DD"; one snapshot per org per day (upserted).
     # No standalone index: reads filter by org_id or the (org_id, day) unique.
     day: Mapped[str] = mapped_column(String)
@@ -294,7 +300,9 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    org_id: Mapped[str] = mapped_column(String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True)
+    org_id: Mapped[str] = mapped_column(
+        String, ForeignKey("org.id"), default=DEMO_ORG_ID, index=True
+    )
     # Who acted (user email) and what they did, e.g. action="enroll_token.mint".
     # target identifies the acted-on object (label or non-secret id), nullable
     # for actions with no single subject.

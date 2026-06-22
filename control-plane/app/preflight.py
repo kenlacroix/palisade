@@ -8,6 +8,7 @@ we fail closed (raise, container won't start) rather than warn. Dev/test (SQLite
 and the public demo (which sets the escape hatch) only log the findings, so the
 one-command local workflow and the live demo keep working.
 """
+
 from __future__ import annotations
 
 import logging

@@ -7,6 +7,7 @@ and these helpers are pass-throughs. With a KEK set, writes seal evidence into
 `Finding.evidence_enc` and empty `Finding.evidence`; reads go through
 open_evidence regardless of which path produced the row.
 """
+
 from __future__ import annotations
 
 import base64

@@ -3,6 +3,7 @@
 Run with:  python -m app.posture_trends_test
 or:        pytest app/posture_trends_test.py
 """
+
 from __future__ import annotations
 
 from sqlalchemy import select
@@ -15,9 +16,9 @@ from app.models import PostureSnapshot
 def _snapshot_count(org_id: str = "org-demo") -> int:
     with db_module.SessionLocal() as db:
         return len(
-            db.execute(
-                select(PostureSnapshot).where(PostureSnapshot.org_id == org_id)
-            ).scalars().all()
+            db.execute(select(PostureSnapshot).where(PostureSnapshot.org_id == org_id))
+            .scalars()
+            .all()
         )
 
 

@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { acceptDetection, draftDetection, fetchDetections, useApi, type DraftResponse } from "../api.ts";
+import {
+  acceptDetection,
+  draftDetection,
+  fetchDetections,
+  useApi,
+  type DraftResponse,
+} from "../api.ts";
 import { Card, SevBadge } from "../ui.tsx";
 
 export default function Detections() {
@@ -94,7 +100,12 @@ export default function Detections() {
           </pre>
           <div className="mt-2 text-xs text-slate-500">
             {draft.signature} · drafted by {draft.model} from{" "}
-            <a href={draft.source_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+            <a
+              href={draft.source_url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:underline"
+            >
               source
             </a>
           </div>
@@ -131,7 +142,9 @@ export default function Detections() {
           </tbody>
         </table>
         {error ? (
-          <div className="px-4 py-6 text-center text-sm text-red-400">Failed to load detections: {error}</div>
+          <div className="px-4 py-6 text-center text-sm text-red-400">
+            Failed to load detections: {error}
+          </div>
         ) : rows.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-slate-500">
             {loading ? "Loading detections…" : "No detections in the catalog."}
@@ -140,7 +153,9 @@ export default function Detections() {
       </Card>
 
       <p className="text-sm text-slate-500">
-        <span className="text-accent">+ New from CVE URL</span> → AI drafts a template → you review → <span className="text-accent">Accept &amp; ship</span> pushes it to the signed catalog (agents pull it next bundle).
+        <span className="text-accent">+ New from CVE URL</span> → AI drafts a template → you review
+        → <span className="text-accent">Accept &amp; ship</span> pushes it to the signed catalog
+        (agents pull it next bundle).
       </p>
     </div>
   );

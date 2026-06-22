@@ -36,7 +36,9 @@ export default function Audit() {
           </tbody>
         </table>
         {error ? (
-          <div className="px-4 py-6 text-center text-sm text-red-400">Failed to load audit log: {error}</div>
+          <div className="px-4 py-6 text-center text-sm text-red-400">
+            Failed to load audit log: {error}
+          </div>
         ) : rows.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-slate-500">
             {loading ? "Loading audit log…" : "No audited actions yet."}

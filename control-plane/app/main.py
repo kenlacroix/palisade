@@ -55,11 +55,14 @@ def _bootstrap() -> None:
             )
             db.add(demo)
             db.flush()
-        if db.execute(
-            select(Membership).where(
-                Membership.user_id == demo.id, Membership.org_id == DEMO_ORG_ID
-            )
-        ).scalar_one_or_none() is None:
+        if (
+            db.execute(
+                select(Membership).where(
+                    Membership.user_id == demo.id, Membership.org_id == DEMO_ORG_ID
+                )
+            ).scalar_one_or_none()
+            is None
+        ):
             db.add(Membership(user_id=demo.id, org_id=DEMO_ORG_ID, role="owner"))
 
         # Seed single-use enroll tokens from env into the demo org. Bootstrap
@@ -69,7 +72,11 @@ def _bootstrap() -> None:
         for tok in config.enroll_tokens():
             existing = db.get(EnrollToken, tok)
             if existing is None:
-                db.add(EnrollToken(token=tok, org_id=DEMO_ORG_ID, label="seed", expires_at=bootstrap_expiry))
+                db.add(
+                    EnrollToken(
+                        token=tok, org_id=DEMO_ORG_ID, label="seed", expires_at=bootstrap_expiry
+                    )
+                )
             elif existing.used_at is None:
                 existing.expires_at = bootstrap_expiry
         db.commit()

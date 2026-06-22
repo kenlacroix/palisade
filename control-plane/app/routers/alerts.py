@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Response
@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from .. import alerting, audit, notify
 from ..db import get_db
 from ..models import Alert, AlertChannel, AlertRule, Asset, Detection, Finding, Org, User
-from ..tenancy import current_org, current_user, require_role
 from ..schemas import (
     AlertChannelCreate,
     AlertChannelRow,
@@ -22,6 +21,7 @@ from ..schemas import (
     AlertsList,
     ChannelTestResponse,
 )
+from ..tenancy import current_org, current_user, require_role
 
 # Alerting BFF: org-scoped via current_org; mutations require admin.
 router = APIRouter(prefix="/v1", tags=["alerts"])
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/v1", tags=["alerts"])
 def _iso(dt: datetime | None) -> str | None:
     if dt is None:
         return None
-    return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).isoformat()
+    return (dt if dt.tzinfo else dt.replace(tzinfo=UTC)).isoformat()
 
 
 def _redact(config: dict[str, Any]) -> dict[str, Any]:
@@ -81,9 +81,11 @@ def _get_rule(db: Session, org_id: str, rule_id: str) -> AlertRule:
 
 @router.get("/alerts", response_model=AlertsList)
 def list_alerts(org: Org = Depends(current_org), db: Session = Depends(get_db)) -> AlertsList:
-    alerts = db.execute(
-        select(Alert).where(Alert.org_id == org.id).order_by(Alert.created_at.desc())
-    ).scalars().all()
+    alerts = (
+        db.execute(select(Alert).where(Alert.org_id == org.id).order_by(Alert.created_at.desc()))
+        .scalars()
+        .all()
+    )
     rows: list[AlertRow] = []
     for a in alerts:
         finding = db.get(Finding, a.finding_id)
@@ -109,10 +111,18 @@ def list_alerts(org: Org = Depends(current_org), db: Session = Depends(get_db)) 
 
 
 @router.get("/alert-channels", response_model=AlertChannelsList)
-def list_channels(org: Org = Depends(current_org), db: Session = Depends(get_db)) -> AlertChannelsList:
-    channels = db.execute(
-        select(AlertChannel).where(AlertChannel.org_id == org.id).order_by(AlertChannel.created_at.desc())
-    ).scalars().all()
+def list_channels(
+    org: Org = Depends(current_org), db: Session = Depends(get_db)
+) -> AlertChannelsList:
+    channels = (
+        db.execute(
+            select(AlertChannel)
+            .where(AlertChannel.org_id == org.id)
+            .order_by(AlertChannel.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
     return AlertChannelsList(channels=[_channel_row(c) for c in channels])
 
 
@@ -133,7 +143,9 @@ def create_channel(
     )
     db.add(c)
     db.flush()
-    audit.record(db, org_id=org.id, actor=user.email, action="alert_channel.create", target=c.name or c.id)
+    audit.record(
+        db, org_id=org.id, actor=user.email, action="alert_channel.create", target=c.name or c.id
+    )
     db.commit()
     return _channel_row(c)
 
@@ -155,7 +167,9 @@ def update_channel(
     if "config" in body and isinstance(body["config"], dict):
         # Merge so omitted secret keys keep their stored value.
         c.config = {**(c.config or {}), **body["config"]}
-    audit.record(db, org_id=org.id, actor=user.email, action="alert_channel.update", target=c.name or c.id)
+    audit.record(
+        db, org_id=org.id, actor=user.email, action="alert_channel.update", target=c.name or c.id
+    )
     db.commit()
     return _channel_row(c)
 
@@ -170,13 +184,23 @@ def delete_channel(
 ) -> Response:
     c = _get_channel(db, org.id, channel_id)
     # Cascade-delete dependent rules so no rule dangles on a missing channel.
-    rules = db.execute(
-        select(AlertRule).where(AlertRule.org_id == org.id, AlertRule.channel_id == channel_id)
-    ).scalars().all()
+    rules = (
+        db.execute(
+            select(AlertRule).where(AlertRule.org_id == org.id, AlertRule.channel_id == channel_id)
+        )
+        .scalars()
+        .all()
+    )
     for r in rules:
         db.delete(r)
     db.delete(c)
-    audit.record(db, org_id=org.id, actor=user.email, action="alert_channel.delete", target=c.name or channel_id)
+    audit.record(
+        db,
+        org_id=org.id,
+        actor=user.email,
+        action="alert_channel.delete",
+        target=c.name or channel_id,
+    )
     db.commit()
     return Response(status_code=204)
 
@@ -210,9 +234,15 @@ def test_channel(
 
 @router.get("/alert-rules", response_model=AlertRulesList)
 def list_rules(org: Org = Depends(current_org), db: Session = Depends(get_db)) -> AlertRulesList:
-    rules = db.execute(
-        select(AlertRule).where(AlertRule.org_id == org.id).order_by(AlertRule.created_at.desc())
-    ).scalars().all()
+    rules = (
+        db.execute(
+            select(AlertRule)
+            .where(AlertRule.org_id == org.id)
+            .order_by(AlertRule.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
     rows: list[AlertRuleRow] = []
     for r in rules:
         channel = db.get(AlertChannel, r.channel_id)
@@ -245,7 +275,9 @@ def create_rule(
     )
     db.add(r)
     db.flush()
-    audit.record(db, org_id=org.id, actor=user.email, action="alert_rule.create", target=r.name or r.id)
+    audit.record(
+        db, org_id=org.id, actor=user.email, action="alert_rule.create", target=r.name or r.id
+    )
     db.commit()
     return _rule_row(r, channel.name)
 
@@ -276,7 +308,9 @@ def update_rule(
         if channel is None or channel.org_id != org.id:
             raise HTTPException(status_code=400, detail="channel_id not in this org")
         r.channel_id = body["channel_id"]
-    audit.record(db, org_id=org.id, actor=user.email, action="alert_rule.update", target=r.name or r.id)
+    audit.record(
+        db, org_id=org.id, actor=user.email, action="alert_rule.update", target=r.name or r.id
+    )
     db.commit()
     channel = db.get(AlertChannel, r.channel_id)
     return _rule_row(r, channel.name if channel else "")

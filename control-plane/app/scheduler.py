@@ -18,6 +18,7 @@ Cron bodies are async (arq jobs) and push blocking DB/SDK work into a thread via
 asyncio.to_thread; the real sync logic lives in plain helpers so it's importable
 and testable.
 """
+
 from __future__ import annotations
 
 import asyncio

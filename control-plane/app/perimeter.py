@@ -11,6 +11,7 @@ Targets are checked against an operator-confirmed scope allowlist before any
 request leaves the box. Module-engine detections are skipped here — their
 multi-step logic lives in the compiled agent, not the control plane.
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -213,12 +214,12 @@ def _eval_dsl(expr: str, elapsed: float) -> bool:
     expr = expr.replace(" ", "")
     if not expr.startswith("duration"):
         return False
-    rest = expr[len("duration"):]
+    rest = expr[len("duration") :]
     op = next((o for o in (">=", "<=", "==", ">", "<") if rest.startswith(o)), "")
     if not op:
         return False
     try:
-        want = float(rest[len(op):])
+        want = float(rest[len(op) :])
     except ValueError:
         return False
     got = elapsed

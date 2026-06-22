@@ -25,7 +25,17 @@ from . import config
 _request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 _LATENCY_BUCKETS = (
-    0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.5,
+    5.0,
+    10.0,
 )
 
 
@@ -95,9 +105,7 @@ class JsonFormatter(logging.Formatter):
 def setup_logging() -> None:
     handler = logging.StreamHandler(sys.stdout)
     if config.LOG_FORMAT == "text":
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-        )
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     else:
         handler.setFormatter(JsonFormatter())
     root = logging.getLogger()

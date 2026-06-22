@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from sqlalchemy import func, select
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/v1/members", tags=["members"])
 def _iso(dt: datetime | None) -> str | None:
     if dt is None:
         return None
-    return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).isoformat()
+    return (dt if dt.tzinfo else dt.replace(tzinfo=UTC)).isoformat()
 
 
 def _member_row(m: Membership, u: User) -> MemberRow:
@@ -74,15 +74,21 @@ def add_member(
     user = db.execute(select(User).where(User.email == body.email)).scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="no user with that email")
-    if db.execute(
-        select(Membership).where(Membership.user_id == user.id, Membership.org_id == org.id)
-    ).scalar_one_or_none() is not None:
+    if (
+        db.execute(
+            select(Membership).where(Membership.user_id == user.id, Membership.org_id == org.id)
+        ).scalar_one_or_none()
+        is not None
+    ):
         raise HTTPException(status_code=409, detail="already a member of this org")
     m = Membership(user_id=user.id, org_id=org.id, role=body.role)
     db.add(m)
     db.flush()
     audit.record(
-        db, org_id=org.id, actor=actor.email, action="membership.create",
+        db,
+        org_id=org.id,
+        actor=actor.email,
+        action="membership.create",
         target=f"{user.email}:{body.role}",
     )
     db.commit()
@@ -105,7 +111,10 @@ def update_member_role(
     m.role = body.role
     user = db.get(User, user_id)
     audit.record(
-        db, org_id=org.id, actor=actor.email, action="membership.update",
+        db,
+        org_id=org.id,
+        actor=actor.email,
+        action="membership.update",
         target=f"{user.email if user else user_id}:{body.role}",
     )
     db.commit()
@@ -126,7 +135,10 @@ def remove_member(
     user = db.get(User, user_id)
     db.delete(m)
     audit.record(
-        db, org_id=org.id, actor=actor.email, action="membership.delete",
+        db,
+        org_id=org.id,
+        actor=actor.email,
+        action="membership.delete",
         target=user.email if user else user_id,
     )
     db.commit()

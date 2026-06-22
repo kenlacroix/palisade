@@ -3,7 +3,8 @@ import type { Severity, Exposure } from "./data.ts";
 
 // Dev: same-origin (vite proxies /v1 to the control plane). Prod build defaults
 // to the hosted control plane. Override either with VITE_API_BASE.
-const BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? "https://api.trypalisade.dev" : "");
+const BASE =
+  import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? "https://api.trypalisade.dev" : "");
 
 // The session token lives only in memory; persistence is the httpOnly
 // `palisade_session` cookie set by the control plane, which JS cannot read, so

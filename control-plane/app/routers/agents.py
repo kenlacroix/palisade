@@ -2,18 +2,16 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..auth import require_agent
 from .. import audit, config, mtls
+from ..auth import require_agent
 from ..db import get_db
 from ..models import Agent, Asset, Detection, EnrollToken, Org, Scan, User
-from ..tenancy import _set_rls_org, current_org, current_user, require_role
-from ..version_match import service_matches
 from ..schemas import (
     AssetsRequest,
     AssetsResponse,
@@ -25,6 +23,8 @@ from ..schemas import (
     HeartbeatResponse,
     Job,
 )
+from ..tenancy import _set_rls_org, current_org, current_user, require_role
+from ..version_match import service_matches
 
 router = APIRouter(prefix="/v1/agents", tags=["agents"])
 
@@ -34,7 +34,7 @@ INVENTORY_STALE_S = 3600
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _iso(dt: datetime | None) -> str | None:
@@ -99,7 +99,11 @@ def revoke_enroll_token(
         raise HTTPException(status_code=404, detail="enroll token not found")
     db.delete(row)
     audit.record(
-        db, org_id=org.id, actor=user.email, action="enroll_token.revoke", target=row.label or token[:8]
+        db,
+        org_id=org.id,
+        actor=user.email,
+        action="enroll_token.revoke",
+        target=row.label or token[:8],
     )
     db.commit()
     return Response(status_code=204)
@@ -175,9 +179,7 @@ def heartbeat(
 
     jobs: list[Job] = []
 
-    assets = db.execute(
-        select(Asset).where(Asset.org_id == agent.org_id)
-    ).scalars().all()
+    assets = db.execute(select(Asset).where(Asset.org_id == agent.org_id)).scalars().all()
 
     inventory_stale = (
         agent.last_discover_at is None
@@ -209,7 +211,8 @@ def heartbeat(
         targets = []
         for asset in assets:
             det_ids = [
-                det.id for det in detections
+                det.id
+                for det in detections
                 if det.match_service == asset.service
                 and service_matches(asset.version, det.match_versions)
             ]
@@ -287,4 +290,4 @@ def upsert_assets(
 
 def _ensure_aware(dt: datetime) -> datetime:
     # SQLite returns naive datetimes; treat stored values as UTC.
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)

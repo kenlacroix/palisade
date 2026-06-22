@@ -76,7 +76,13 @@ describe("Alerts", () => {
     mockFetchAlerts.mockResolvedValue({
       alerts: [
         alert(),
-        alert({ id: "al2", title: "TLS weak cipher", severity: "medium", status: "failed", event: "regressed" }),
+        alert({
+          id: "al2",
+          title: "TLS weak cipher",
+          severity: "medium",
+          status: "failed",
+          event: "regressed",
+        }),
       ],
     });
 

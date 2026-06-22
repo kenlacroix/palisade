@@ -85,7 +85,9 @@ def _flow_field(det: dict) -> str:
         headers = r.get("headers") or {}
         hdrs = ",".join(sorted(f"{k}={v}" for k, v in headers.items()))
         reqs.append(
-            SP.join([r.get("id", ""), r.get("method", ""), r.get("path", ""), r.get("body") or "", hdrs])
+            SP.join(
+                [r.get("id", ""), r.get("method", ""), r.get("path", ""), r.get("body") or "", hdrs]
+            )
         )
     return "flow" + US + RS.join(reqs) + US + GS.join(flow.get("confirm") or [])
 
