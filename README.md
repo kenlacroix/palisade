@@ -65,6 +65,20 @@ To monitor your **own** hosts instead of the bundled target: mint an enroll
 token in the UI (**Add agent**), then run the agent binary on each host
 (`palisade enroll --token <T> --server <url>` → `palisade run`).
 
+## Screens
+
+The portal with `PALISADE_SEED_DEMO=1` (every screen populated) and
+`PALISADE_DEMO_MODE=1` (the read-only "live demo" banner).
+
+| | |
+|---|---|
+| **Dashboard** — posture score, 30-day trend, needs-attention | **Finding detail** — evidence, fingerprint, remediation, refs |
+| [![Dashboard](docs/screenshots/01-dashboard.png)](docs/screenshots/01-dashboard.png) | [![Finding detail](docs/screenshots/02-finding-detail.png)](docs/screenshots/02-finding-detail.png) |
+| **Assets** — discovered services, version, exposure, findings | **Detections** — signed CVE catalog with CVSS and tenant hits |
+| [![Assets](docs/screenshots/03-assets.png)](docs/screenshots/03-assets.png) | [![Detections](docs/screenshots/04-detections.png)](docs/screenshots/04-detections.png) |
+| **Alerts** — channels, rules, quiet hours, history | |
+| [![Alerts](docs/screenshots/05-alerts.png)](docs/screenshots/05-alerts.png) | |
+
 ## Quickstart (zero infra, sqlite)
 
 Requires Go 1.22+, Python 3.12, Node 18+.

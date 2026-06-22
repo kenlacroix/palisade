@@ -316,6 +316,9 @@ class SessionInfo(BaseModel):
     org_name: str
     role: Role
     memberships: list[MembershipRow]
+    # Mirrors MeResponse so the demo banner shows immediately after login,
+    # not only after the next /me on reload.
+    demo_mode: bool = False
 
 
 class MeResponse(BaseModel):

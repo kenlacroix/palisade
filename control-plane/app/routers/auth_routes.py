@@ -70,6 +70,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> SessionInfo:
         org_name=active.org_name,
         role=active.role,
         memberships=memberships,
+        demo_mode=config.demo_mode(),
     )
 
 
