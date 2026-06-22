@@ -79,6 +79,17 @@ go run ./cmd/palisade enroll --token PLS-DEMO --server http://127.0.0.1:8000
 
 Expected: `palisade: enrolled as agent <uuid> (heartbeat every 30s)`.
 
+This demo builds the agent from source. On a real host you install the prebuilt
+binary instead, then enroll against the hosted control plane:
+
+```bash
+curl -fsSL https://trypalisade.dev/install | sh \
+  && palisade enroll --token <token> --server https://api.trypalisade.dev
+```
+
+The installer (`site/public/install`) detects OS/arch, downloads the matching
+release binary, and falls back to a source build when none is published.
+
 ## 4. Terminal C — run the agent loop
 
 ```bash
