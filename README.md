@@ -2,6 +2,8 @@
 
 **[trypalisade.dev](https://trypalisade.dev)**
 
+![Palisade demo](docs/screenshots/demo.gif)
+
 Attack-surface monitoring for self-hosted and AI-infra services. A pull-only
 agent enrolls once, discovers listening services on-host, and runs CVE
 detections locally — only normalized findings ever leave the host. A FastAPI
