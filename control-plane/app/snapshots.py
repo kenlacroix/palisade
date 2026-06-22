@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,7 +17,7 @@ def _score(penalty: int) -> int:
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    return datetime.now(UTC).date().isoformat()
 
 
 def capture_snapshot(db: Session, org_id: str) -> PostureSnapshot:
@@ -26,19 +26,21 @@ def capture_snapshot(db: Session, org_id: str) -> PostureSnapshot:
     Idempotent within a day: re-running overwrites the same (org_id, day) row.
     Commits internally; callers need not commit on its behalf.
     """
-    findings = db.execute(
-        select(Finding).where(
-            Finding.org_id == org_id,
-            Finding.status.in_(ACTIVE_STATUSES),
+    findings = (
+        db.execute(
+            select(Finding).where(
+                Finding.org_id == org_id,
+                Finding.status.in_(ACTIVE_STATUSES),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     crit = sum(1 for f in findings if f.severity == "critical")
     high = sum(1 for f in findings if f.severity == "high")
     med = sum(1 for f in findings if f.severity == "medium")
-    assets_count = db.execute(
-        select(Asset).where(Asset.org_id == org_id)
-    ).scalars().all()
+    assets_count = db.execute(select(Asset).where(Asset.org_id == org_id)).scalars().all()
     assets_n = len(assets_count)
     score = _score(sum(SEVERITY_WEIGHTS.get(f.severity, 0) for f in findings))
 
@@ -52,7 +54,7 @@ def capture_snapshot(db: Session, org_id: str) -> PostureSnapshot:
     if snap is None:
         snap = PostureSnapshot(org_id=org_id, day=day)
         db.add(snap)
-    snap.captured_at = datetime.now(timezone.utc)
+    snap.captured_at = datetime.now(UTC)
     snap.score = score
     snap.critical = crit
     snap.high = high
@@ -68,13 +70,11 @@ def _day_score(db: Session, org_id: str, d: date) -> int:
     A finding counts as active on day D if it first appeared on/before D and was
     still open through D (either currently active or last seen on/after D).
     """
-    findings = db.execute(
-        select(Finding).where(Finding.org_id == org_id)
-    ).scalars().all()
+    findings = db.execute(select(Finding).where(Finding.org_id == org_id)).scalars().all()
     penalty = 0
     for f in findings:
-        first = (f.first_seen or datetime.now(timezone.utc)).date()
-        last = (f.last_seen or f.first_seen or datetime.now(timezone.utc)).date()
+        first = (f.first_seen or datetime.now(UTC)).date()
+        last = (f.last_seen or f.first_seen or datetime.now(UTC)).date()
         if first <= d and (f.status in ACTIVE_STATUSES or last >= d):
             penalty += SEVERITY_WEIGHTS.get(f.severity, 0)
     return _score(penalty)
@@ -86,10 +86,10 @@ def trend30d(db: Session, org_id: str, today_score: int) -> list[int]:
     Prefers a stored PostureSnapshot per day; reconstructs from finding history
     for days predating this feature. Today reflects the live score.
     """
-    today = datetime.now(timezone.utc).date()
-    snaps = db.execute(
-        select(PostureSnapshot).where(PostureSnapshot.org_id == org_id)
-    ).scalars().all()
+    today = datetime.now(UTC).date()
+    snaps = (
+        db.execute(select(PostureSnapshot).where(PostureSnapshot.org_id == org_id)).scalars().all()
+    )
     by_day = {s.day: s.score for s in snaps}
 
     trend: list[int] = []

@@ -28,6 +28,7 @@ def is_production() -> bool:
         return True
     return DATABASE_URL.startswith("postgresql") and not allow_insecure_defaults()
 
+
 # Durable job queue (Arq + Redis). Unset -> triage/alert delivery fall back to
 # in-process FastAPI BackgroundTasks (the dev/SQLite path; no Redis required).
 # Set in production so background work survives restarts and the API can scale.
@@ -138,7 +139,9 @@ def cors_origins() -> list[str]:
 # total probes in a contiguous scan burst so a runaway scan can't fan out.
 PERIMETER_RATE_LIMIT_RPS = float(os.environ.get("PALISADE_PERIMETER_RATE_LIMIT_RPS", "5.0"))
 PERIMETER_MIN_INTERVAL_S = float(os.environ.get("PALISADE_PERIMETER_MIN_INTERVAL_S", "0"))
-PERIMETER_MAX_REQUESTS_PER_SCAN = int(os.environ.get("PALISADE_PERIMETER_MAX_REQUESTS_PER_SCAN", "500"))
+PERIMETER_MAX_REQUESTS_PER_SCAN = int(
+    os.environ.get("PALISADE_PERIMETER_MAX_REQUESTS_PER_SCAN", "500")
+)
 
 
 # --- cron scheduler (SPEC §177) ---
@@ -152,7 +155,9 @@ PERIMETER_MAX_REQUESTS_PER_SCAN = int(os.environ.get("PALISADE_PERIMETER_MAX_REQ
 #   minutes-of-hour set). SNAPSHOT_UTC_HOUR: hour (0..23, UTC) the daily posture
 #   snapshot runs.
 SCAN_EVERY_HOURS = max(1, min(24, int(os.environ.get("PALISADE_SCAN_EVERY_HOURS", "6"))))
-DEFERRED_RELEASE_EVERY_MIN = max(1, min(60, int(os.environ.get("PALISADE_DEFERRED_RELEASE_EVERY_MIN", "5"))))
+DEFERRED_RELEASE_EVERY_MIN = max(
+    1, min(60, int(os.environ.get("PALISADE_DEFERRED_RELEASE_EVERY_MIN", "5")))
+)
 SNAPSHOT_UTC_HOUR = max(0, min(23, int(os.environ.get("PALISADE_SNAPSHOT_UTC_HOUR", "0"))))
 
 

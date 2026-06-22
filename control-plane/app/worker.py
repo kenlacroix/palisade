@@ -2,6 +2,7 @@
 API would otherwise run inline, but durably and with retries. Bodies are sync
 (sync SQLAlchemy + SDK), so they run in a thread to keep the worker loop free.
 """
+
 from __future__ import annotations
 
 import asyncio

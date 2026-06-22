@@ -12,6 +12,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: Lint (ruff + golangci-lint + eslint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ruff (control-plane)
+        working-directory: control-plane
+        run: |
+          pip install ruff==0.15.18
+          ruff check app/
+          ruff format --check app/
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+          cache-dependency-path: agent/go.mod
+      - name: golangci-lint (agent)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.59.1
+          working-directory: agent
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: ESLint + Prettier (web)
+        working-directory: web
+        run: |
+          npm ci
+          npm run lint
+          npm run format:check
+
   agent:
     name: Agent (Go)
     runs-on: ubuntu-latest

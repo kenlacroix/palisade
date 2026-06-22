@@ -7,6 +7,7 @@ per org (not globally) so one tenant can't collide with / overwrite another's.
 Run with:  python -m app.tenant_isolation_test
 or:        pytest app/tenant_isolation_test.py
 """
+
 from __future__ import annotations
 
 from app import db as db_module
@@ -27,10 +28,16 @@ def _demo_scan_and_asset(client):
     r = client.post(
         f"/v1/agents/{agent_id}/assets",
         json={
-            "assets": [{
-                "host": "ai.lab", "port": 4000, "service": "litellm",
-                "product": "litellm", "version": "1.39.0", "exposure": "external",
-            }]
+            "assets": [
+                {
+                    "host": "ai.lab",
+                    "port": 4000,
+                    "service": "litellm",
+                    "product": "litellm",
+                    "version": "1.39.0",
+                    "exposure": "external",
+                }
+            ]
         },
         headers=auth,
     )
@@ -65,13 +72,17 @@ def _second_org_agent(client):
 
 def _finding_body(asset_id: str):
     return {
-        "findings": [{
-            "detection_id": "litellm-proxy-preauth-sqli",
-            "asset_id": asset_id,
-            "severity": "critical",
-            "fingerprint": finding_fingerprint(asset_id, "litellm-proxy-preauth-sqli", "sleep5"),
-            "evidence": {"request": "POST /key/info", "note": "x"},
-        }]
+        "findings": [
+            {
+                "detection_id": "litellm-proxy-preauth-sqli",
+                "asset_id": asset_id,
+                "severity": "critical",
+                "fingerprint": finding_fingerprint(
+                    asset_id, "litellm-proxy-preauth-sqli", "sleep5"
+                ),
+                "evidence": {"request": "POST /key/info", "note": "x"},
+            }
+        ]
     }
 
 
@@ -123,10 +134,22 @@ def test_fingerprint_unique_per_org_not_global():
                 db.add_all([a1, a2])
                 db.flush()
                 fp = "shared-fingerprint"
-                db.add(Finding(org_id="org-demo", asset_id=a1.id,
-                               detection_id="litellm-proxy-preauth-sqli", fingerprint=fp))
-                db.add(Finding(org_id="org-two", asset_id=a2.id,
-                               detection_id="litellm-proxy-preauth-sqli", fingerprint=fp))
+                db.add(
+                    Finding(
+                        org_id="org-demo",
+                        asset_id=a1.id,
+                        detection_id="litellm-proxy-preauth-sqli",
+                        fingerprint=fp,
+                    )
+                )
+                db.add(
+                    Finding(
+                        org_id="org-two",
+                        asset_id=a2.id,
+                        detection_id="litellm-proxy-preauth-sqli",
+                        fingerprint=fp,
+                    )
+                )
                 db.commit()
                 n = db.query(Finding).filter(Finding.fingerprint == fp).count()
                 assert n == 2, n

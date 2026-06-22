@@ -58,7 +58,8 @@ export default function App() {
       .catch(() => setAuth("out"));
   }, [auth]);
 
-  if (auth === "checking") return <div className="flex h-full items-center justify-center text-slate-500">Loading…</div>;
+  if (auth === "checking")
+    return <div className="flex h-full items-center justify-center text-slate-500">Loading…</div>;
   if (auth === "out" || !session) {
     return (
       <Login
@@ -178,10 +179,7 @@ function Shell({
             <div className="text-slate-500">
               {session.user.email} · <span className="text-slate-400">{session.role}</span>
             </div>
-            <button
-              onClick={onSignOut_}
-              className="text-slate-500 hover:text-slate-300"
-            >
+            <button onClick={onSignOut_} className="text-slate-500 hover:text-slate-300">
               Sign out
             </button>
           </div>

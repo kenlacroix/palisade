@@ -25,6 +25,7 @@ unauthenticated GET /api/users that leaks user records, which the seeded
 Run with:  python -m app.live_integration_test
 or:        pytest app/live_integration_test.py
 """
+
 from __future__ import annotations
 
 import os
@@ -40,7 +41,7 @@ from pathlib import Path
 
 import httpx
 
-CP_DIR = Path(__file__).resolve().parents[1]          # control-plane/
+CP_DIR = Path(__file__).resolve().parents[1]  # control-plane/
 REPO_ROOT = CP_DIR.parent
 AGENT_DIR = REPO_ROOT / "agent"
 
@@ -119,7 +120,8 @@ def test_live_agent_control_plane():
         # 1) build the real agent binary
         subprocess.run(
             ["go", "build", "-o", str(binary), "./cmd/palisade"],
-            cwd=AGENT_DIR, check=True,
+            cwd=AGENT_DIR,
+            check=True,
         )
 
         # 2) plant the vulnerable service on the well-known port (all interfaces,
@@ -145,11 +147,22 @@ def test_live_agent_control_plane():
             # bearer fallback enabled (mTLS-required would reject the agent).
             "PALISADE_ALLOW_INSECURE_DEFAULTS": "1",
         }
-        procs.append(subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "app.main:app",
-             "--host", "127.0.0.1", "--port", str(cp_port)],
-            cwd=CP_DIR, env=cp_env,
-        ))
+        procs.append(
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "uvicorn",
+                    "app.main:app",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(cp_port),
+                ],
+                cwd=CP_DIR,
+                env=cp_env,
+            )
+        )
         _wait_http(f"{server_url}/healthz", 30.0, expect_status=200)
 
         agent_env = {
@@ -162,7 +175,8 @@ def test_live_agent_control_plane():
         # 5) enroll the real binary against the live server
         subprocess.run(
             [str(binary), "enroll", "--token", ENROLL_TOKEN, "--server", server_url],
-            env=agent_env, check=True,
+            env=agent_env,
+            check=True,
         )
 
         # 6) run the agent loop (discover -> assets -> scan -> findings)
@@ -170,8 +184,9 @@ def test_live_agent_control_plane():
 
         # 7) poll the org-scoped read API until the finding lands
         with httpx.Client(base_url=server_url, timeout=5.0) as c:
-            r = c.post("/v1/auth/login",
-                       json={"email": "demo@palisade.local", "password": "palisade"})
+            r = c.post(
+                "/v1/auth/login", json={"email": "demo@palisade.local", "password": "palisade"}
+            )
             assert r.status_code == 200, r.text
             sess = {"Authorization": f"Bearer {r.json()['token']}"}
 
@@ -194,8 +209,10 @@ def test_live_agent_control_plane():
         assert finding["severity"] == "critical", finding
         assert finding["cve"] == DETECTION_CVE, finding
 
-        print("LIVE OK: real agent binary -> live control plane -> "
-              f"{DETECTION_ID} finding ({DETECTION_CVE})")
+        print(
+            "LIVE OK: real agent binary -> live control plane -> "
+            f"{DETECTION_ID} finding ({DETECTION_CVE})"
+        )
     finally:
         for p in procs:
             p.terminate()

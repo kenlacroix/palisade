@@ -4,6 +4,7 @@ Locks in fail-closed behavior: a Postgres deployment carrying public default
 secrets refuses to boot, while SQLite dev/test and the explicit insecure-defaults
 escape hatch only warn. Run:  python -m app.preflight_test  or  pytest.
 """
+
 from __future__ import annotations
 
 import base64
@@ -17,14 +18,22 @@ _REAL_KEK = base64.b64encode(b"\x07" * 32).decode()
 
 def _snapshot():
     return (
-        config.DATABASE_URL, config.SIGNING_KEY, config.DEMO_USER_PASSWORD,
-        config.EVIDENCE_KEK, os.environ.get("PALISADE_ALLOW_INSECURE_DEFAULTS"),
+        config.DATABASE_URL,
+        config.SIGNING_KEY,
+        config.DEMO_USER_PASSWORD,
+        config.EVIDENCE_KEK,
+        os.environ.get("PALISADE_ALLOW_INSECURE_DEFAULTS"),
     )
 
 
 def _restore(snap):
-    (config.DATABASE_URL, config.SIGNING_KEY, config.DEMO_USER_PASSWORD,
-     config.EVIDENCE_KEK, insecure) = snap
+    (
+        config.DATABASE_URL,
+        config.SIGNING_KEY,
+        config.DEMO_USER_PASSWORD,
+        config.EVIDENCE_KEK,
+        insecure,
+    ) = snap
     if insecure is None:
         os.environ.pop("PALISADE_ALLOW_INSECURE_DEFAULTS", None)
     else:
@@ -44,7 +53,9 @@ def _configure(*, db, signing, demo_pw, kek, insecure):
 
 _PG_DEFAULTS = dict(
     db="postgresql+psycopg://palisade:palisade@postgres:5432/palisade",
-    signing="", demo_pw="palisade", kek="",
+    signing="",
+    demo_pw="palisade",
+    kek="",
 )
 
 
@@ -108,7 +119,10 @@ def test_demo_seed_is_flagged_as_forgeable():
     try:
         _configure(
             db="postgresql+psycopg://palisade:rotated@db/palisade",
-            signing=DEMO_SEED_B64, demo_pw="x", kek=_REAL_KEK, insecure=False,
+            signing=DEMO_SEED_B64,
+            demo_pw="x",
+            kek=_REAL_KEK,
+            insecure=False,
         )
         issues = preflight.security_issues()
         assert any("SIGNING_KEY" in i for i in issues), issues

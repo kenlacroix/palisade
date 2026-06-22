@@ -6,11 +6,12 @@ cert in the MTLS_CERT_HEADER; verify_client_cert validates it against this CA
 and returns the fingerprint that maps back to an Agent row. Verification never
 raises on bad input — it returns None so auth can fall through cleanly.
 """
+
 from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import unquote
 
 from cryptography import x509
@@ -30,7 +31,7 @@ _CA_VALIDITY_DAYS = 3650
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _fingerprint(cert: x509.Certificate) -> str:
@@ -115,9 +116,7 @@ def issue_client_cert(db: Session, agent_id: str, org_id: str) -> dict:
         .not_valid_before(now - timedelta(minutes=1))
         .not_valid_after(not_after)
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-        .add_extension(
-            x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH]), critical=False
-        )
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH]), critical=False)
         .sign(ca_key, hashes.SHA256())
     )
 

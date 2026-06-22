@@ -12,6 +12,7 @@ BackgroundTask which, under TestClient, runs synchronously after the response.
 Run with:  python -m app.alerts_test
 or:        pytest app/alerts_test.py
 """
+
 from __future__ import annotations
 
 import os
@@ -128,8 +129,13 @@ def test_alert_fires_on_matching_finding_and_skips_low():
 
             # Critical finding -> one alert, delivery attempted.
             _ingest(
-                client, auth, scan_id, asset_id,
-                "litellm-proxy-preauth-sqli", "critical", "sleep5",
+                client,
+                auth,
+                scan_id,
+                asset_id,
+                "litellm-proxy-preauth-sqli",
+                "critical",
+                "sleep5",
             )
 
             r = client.get("/v1/alerts", headers=sess)
@@ -144,8 +150,13 @@ def test_alert_fires_on_matching_finding_and_skips_low():
 
             # Low-severity finding -> no new alert.
             _ingest(
-                client, auth, scan_id, asset_id,
-                "litellm-proxy-preauth-sqli", "low", "lowmarker",
+                client,
+                auth,
+                scan_id,
+                asset_id,
+                "litellm-proxy-preauth-sqli",
+                "low",
+                "lowmarker",
             )
             r = client.get("/v1/alerts", headers=sess)
             assert r.status_code == 200, r.text

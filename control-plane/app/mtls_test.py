@@ -4,18 +4,18 @@ REQUIRE_MTLS gate. Reuses the api_test fresh-DB harness.
 Run with:  python -m app.mtls_test
 or:        pytest app/mtls_test.py
 """
+
 from __future__ import annotations
 
 import base64
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 
-from app import config
-from app import mtls
+from app import config, mtls
 from app.api_test import _cleanup, _enroll, _make_client
 from app.db import SessionLocal
 from app.models import Agent, CertAuthority
@@ -27,7 +27,7 @@ _NOT_A_PEM = "BEGIN EC PRIVATE KEY"
 def _foreign_cert_pem() -> str:
     key = ec.generate_private_key(ec.SECP256R1())
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "rogue")])
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(name)
@@ -155,8 +155,9 @@ def test_ca_key_plaintext_without_kek():
                 assert "PRIVATE KEY" in ca.key_pem, "expected plaintext PEM"
 
                 issued = mtls.issue_client_cert(db, "agent-x", "org-demo")
-                assert mtls.verify_client_cert(db, issued["client_cert_pem"]) == (
-                    issued["fingerprint"]
+                assert (
+                    mtls.verify_client_cert(db, issued["client_cert_pem"])
+                    == (issued["fingerprint"])
                 )
             finally:
                 db.close()
@@ -181,8 +182,9 @@ def test_ca_key_sealed_with_kek():
                 assert ca.key_pem.startswith("enc:v1:"), ca.key_pem[:16]
 
                 issued = mtls.issue_client_cert(db, "agent-y", "org-demo")
-                assert mtls.verify_client_cert(db, issued["client_cert_pem"]) == (
-                    issued["fingerprint"]
+                assert (
+                    mtls.verify_client_cert(db, issued["client_cert_pem"])
+                    == (issued["fingerprint"])
                 )
             finally:
                 db.close()
@@ -204,8 +206,9 @@ def test_legacy_plaintext_ca_key_readable_with_kek():
                 # KEK introduced after the row already exists.
                 config.EVIDENCE_KEK = _KEK_B64
                 issued = mtls.issue_client_cert(db, "agent-z", "org-demo")
-                assert mtls.verify_client_cert(db, issued["client_cert_pem"]) == (
-                    issued["fingerprint"]
+                assert (
+                    mtls.verify_client_cert(db, issued["client_cert_pem"])
+                    == (issued["fingerprint"])
                 )
             finally:
                 db.close()

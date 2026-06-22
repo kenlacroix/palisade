@@ -382,7 +382,9 @@ class AlertChannelsList(BaseModel):
 class AlertRuleCreate(BaseModel):
     name: str
     min_severity: Severity = "high"
-    on_events: list[Literal["new", "regressed"]] = Field(default_factory=lambda: ["new", "regressed"])
+    on_events: list[Literal["new", "regressed"]] = Field(
+        default_factory=lambda: ["new", "regressed"]
+    )
     channel_id: str
     enabled: bool = True
     # Quiet hours (optional): local "HH:MM" bounds in quiet_hours_tz; mode picks

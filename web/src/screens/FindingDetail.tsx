@@ -9,7 +9,13 @@ import {
 } from "../api.ts";
 import { Card, SevBadge } from "../ui.tsx";
 
-export default function FindingDetail({ findingId, onBack }: { findingId: string; onBack: () => void }) {
+export default function FindingDetail({
+  findingId,
+  onBack,
+}: {
+  findingId: string;
+  onBack: () => void;
+}) {
   const findings = useApi(fetchFindings, [], { pollMs: 10000 });
   const assets = useApi(fetchAssets, []);
   const [busy, setBusy] = useState<"mute" | "rescan" | null>(null);
@@ -21,11 +27,29 @@ export default function FindingDetail({ findingId, onBack }: { findingId: string
     </button>
   );
 
-  if (findings.error) return <div className="space-y-5">{back}<div className="text-red-400">{findings.error}</div></div>;
-  if (!findings.data) return <div className="space-y-5">{back}<div className="text-slate-500">Loading…</div></div>;
+  if (findings.error)
+    return (
+      <div className="space-y-5">
+        {back}
+        <div className="text-red-400">{findings.error}</div>
+      </div>
+    );
+  if (!findings.data)
+    return (
+      <div className="space-y-5">
+        {back}
+        <div className="text-slate-500">Loading…</div>
+      </div>
+    );
 
   const f = findings.data.findings.find((x) => x.id === findingId);
-  if (!f) return <div className="space-y-5">{back}<div>Finding not found.</div></div>;
+  if (!f)
+    return (
+      <div className="space-y-5">
+        {back}
+        <div>Finding not found.</div>
+      </div>
+    );
   const asset = assets.data?.assets.find((a) => a.id === f.asset_id);
 
   const onMute = async () => {
@@ -91,7 +115,9 @@ export default function FindingDetail({ findingId, onBack }: { findingId: string
         <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
           <span>
             <span className="text-slate-500">Asset</span>{" "}
-            <span className="font-mono text-slate-200">{f.host}:{f.port}</span>{" "}
+            <span className="font-mono text-slate-200">
+              {f.host}:{f.port}
+            </span>{" "}
             {asset && <span className="text-slate-500">({asset.exposure})</span>}
           </span>
           <span>
@@ -110,7 +136,9 @@ export default function FindingDetail({ findingId, onBack }: { findingId: string
       </Card>
 
       <Card className="p-5">
-        <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Evidence</div>
+        <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Evidence
+        </div>
         <div className="rounded-lg bg-ink-900 p-3 font-mono text-sm">
           <div className="text-slate-300">{f.evidence.request ?? "—"}</div>
           {f.evidence.note && <div className="mt-1 text-emerald-400">→ {f.evidence.note}</div>}
@@ -122,14 +150,18 @@ export default function FindingDetail({ findingId, onBack }: { findingId: string
 
       {f.remediation && (
         <Card className="p-5">
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Remediation</div>
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Remediation
+          </div>
           <p className="whitespace-pre-line text-sm text-slate-300">{f.remediation}</p>
         </Card>
       )}
 
       {f.references.length > 0 && (
         <Card className="p-5">
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">References</div>
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            References
+          </div>
           <ul className="space-y-1 text-sm">
             {f.references.map((url) => (
               <li key={url}>

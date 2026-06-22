@@ -46,7 +46,9 @@ export default function Alerts({ role }: { role: Role }) {
   const ruleRows = rules.data?.rules ?? [];
   const alertRows = alerts.data?.alerts ?? [];
 
-  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; error: string | null }>>({});
+  const [testResult, setTestResult] = useState<
+    Record<string, { ok: boolean; error: string | null }>
+  >({});
 
   const [chType, setChType] = useState<ChannelType>("telegram");
   const [chName, setChName] = useState("");
@@ -72,7 +74,10 @@ export default function Alerts({ role }: { role: Role }) {
       const res = await testChannel(id);
       setTestResult((r) => ({ ...r, [id]: res }));
     } catch (e) {
-      setTestResult((r) => ({ ...r, [id]: { ok: false, error: e instanceof Error ? e.message : String(e) } }));
+      setTestResult((r) => ({
+        ...r,
+        [id]: { ok: false, error: e instanceof Error ? e.message : String(e) },
+      }));
     }
   };
 
@@ -147,7 +152,9 @@ export default function Alerts({ role }: { role: Role }) {
                   <td className="px-4 py-3">
                     <button
                       disabled={!canEdit}
-                      onClick={() => updateChannel(c.id, { enabled: !c.enabled }).then(channels.refetch)}
+                      onClick={() =>
+                        updateChannel(c.id, { enabled: !c.enabled }).then(channels.refetch)
+                      }
                       className={c.enabled ? "text-emerald-400" : "text-slate-600"}
                     >
                       {c.enabled ? "on" : "off"}
@@ -181,7 +188,9 @@ export default function Alerts({ role }: { role: Role }) {
             </tbody>
           </table>
           {channels.error ? (
-            <div className="px-4 py-6 text-center text-sm text-red-400">Failed to load channels: {channels.error}</div>
+            <div className="px-4 py-6 text-center text-sm text-red-400">
+              Failed to load channels: {channels.error}
+            </div>
           ) : channelRows.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-slate-500">
               {channels.loading ? "Loading channels…" : "No channels yet."}
@@ -191,7 +200,9 @@ export default function Alerts({ role }: { role: Role }) {
 
         {canEdit && (
           <Card className="p-5">
-            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Add channel</div>
+            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Add channel
+            </div>
             <form onSubmit={onAddChannel} className="space-y-3">
               <div className="flex items-center gap-2">
                 <select
@@ -292,7 +303,9 @@ export default function Alerts({ role }: { role: Role }) {
             </tbody>
           </table>
           {rules.error ? (
-            <div className="px-4 py-6 text-center text-sm text-red-400">Failed to load rules: {rules.error}</div>
+            <div className="px-4 py-6 text-center text-sm text-red-400">
+              Failed to load rules: {rules.error}
+            </div>
           ) : ruleRows.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-slate-500">
               {rules.loading ? "Loading rules…" : "No rules yet."}
@@ -302,7 +315,9 @@ export default function Alerts({ role }: { role: Role }) {
 
         {canEdit && (
           <Card className="p-5">
-            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Add rule</div>
+            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Add rule
+            </div>
             <form onSubmit={onAddRule} className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <input
@@ -434,7 +449,10 @@ export default function Alerts({ role }: { role: Role }) {
                   <td className="px-4 py-3 font-mono text-slate-400">{a.host}</td>
                   <td className="px-4 py-3 text-slate-400">{a.event}</td>
                   <td className="px-4 py-3">
-                    <span className={STATUS_COLOR[a.status] ?? "text-slate-400"} title={a.error ?? undefined}>
+                    <span
+                      className={STATUS_COLOR[a.status] ?? "text-slate-400"}
+                      title={a.error ?? undefined}
+                    >
                       {a.status}
                     </span>
                   </td>
@@ -444,7 +462,9 @@ export default function Alerts({ role }: { role: Role }) {
             </tbody>
           </table>
           {alerts.error ? (
-            <div className="px-4 py-6 text-center text-sm text-red-400">Failed to load alerts: {alerts.error}</div>
+            <div className="px-4 py-6 text-center text-sm text-red-400">
+              Failed to load alerts: {alerts.error}
+            </div>
           ) : alertRows.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-slate-500">
               {alerts.loading ? "Loading alerts…" : "No alerts yet."}

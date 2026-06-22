@@ -4,6 +4,7 @@
 the entry lands in the same transaction as the action it describes — either
 both persist or neither does.
 """
+
 from __future__ import annotations
 
 from sqlalchemy.orm import Session

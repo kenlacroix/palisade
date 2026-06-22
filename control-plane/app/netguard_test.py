@@ -10,6 +10,7 @@ httpx's underlying transport is stubbed so no socket is ever opened.
 
 Run with:  pytest app/netguard_test.py -q
 """
+
 from __future__ import annotations
 
 import socket
@@ -70,12 +71,16 @@ def _boom(*args, **kwargs):
 
 
 def test_blocks_loopback_literal() -> None:
-    assert netguard.safe_get("http://127.0.0.1/admin", timeout=1, max_bytes=100, user_agent=_UA) == ""
+    assert (
+        netguard.safe_get("http://127.0.0.1/admin", timeout=1, max_bytes=100, user_agent=_UA) == ""
+    )
 
 
 def test_blocks_localhost_name(monkeypatch) -> None:
     monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo("127.0.0.1"))
-    assert netguard.safe_get("http://localhost/admin", timeout=1, max_bytes=100, user_agent=_UA) == ""
+    assert (
+        netguard.safe_get("http://localhost/admin", timeout=1, max_bytes=100, user_agent=_UA) == ""
+    )
 
 
 def test_blocks_ipv6_loopback() -> None:
@@ -87,7 +92,9 @@ def test_blocks_ipv6_loopback() -> None:
 
 def test_blocks_metadata_literal() -> None:
     assert (
-        netguard.safe_get("http://169.254.169.254/latest/meta-data/", timeout=1, max_bytes=100, user_agent=_UA)
+        netguard.safe_get(
+            "http://169.254.169.254/latest/meta-data/", timeout=1, max_bytes=100, user_agent=_UA
+        )
         == ""
     )
 
@@ -95,7 +102,10 @@ def test_blocks_metadata_literal() -> None:
 def test_blocks_metadata_via_dns(monkeypatch) -> None:
     # DNS-rebinding shape: a benign-looking name resolves to the metadata IP.
     monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo("169.254.169.254"))
-    assert netguard.safe_get("http://metadata.example/", timeout=1, max_bytes=100, user_agent=_UA) == ""
+    assert (
+        netguard.safe_get("http://metadata.example/", timeout=1, max_bytes=100, user_agent=_UA)
+        == ""
+    )
 
 
 # --- blocked private ranges -------------------------------------------------
@@ -111,7 +121,10 @@ def test_blocks_private_192_168() -> None:
 
 def test_blocks_private_via_dns(monkeypatch) -> None:
     monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo("10.1.2.3"))
-    assert netguard.safe_get("http://internal.example/", timeout=1, max_bytes=100, user_agent=_UA) == ""
+    assert (
+        netguard.safe_get("http://internal.example/", timeout=1, max_bytes=100, user_agent=_UA)
+        == ""
+    )
 
 
 def test_blocks_when_any_resolved_ip_is_private(monkeypatch) -> None:

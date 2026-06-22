@@ -8,7 +8,8 @@ from ..auth import require_agent
 from ..catalog import bundle_version
 from ..db import get_db
 from ..models import Agent, Detection
-from ..schemas import CatalogBundle, Detection as DetectionSchema
+from ..schemas import CatalogBundle
+from ..schemas import Detection as DetectionSchema
 from ..signing import sign_bundle
 
 router = APIRouter(prefix="/v1/catalog", tags=["catalog"])

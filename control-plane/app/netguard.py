@@ -18,6 +18,7 @@ we validated (not a freshly re-resolved one), a rebinding attacker cannot swap
 in an internal address between our check and the connect. The Host header /
 TLS SNI still carry the original hostname so virtual hosting and certs work.
 """
+
 from __future__ import annotations
 
 import ipaddress

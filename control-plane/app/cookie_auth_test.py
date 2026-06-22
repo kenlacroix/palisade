@@ -1,6 +1,7 @@
 """Cookie-backed session auth: login sets an httpOnly `palisade_session`
 cookie, a request carrying only that cookie authenticates, and logout clears it.
 Mirrors api_test.py's isolated-sqlite harness."""
+
 from __future__ import annotations
 
 from .api_test import _cleanup, _make_client

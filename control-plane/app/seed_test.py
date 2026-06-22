@@ -8,9 +8,11 @@ seeding; the posture summary matches the seeded active findings; and with
 PALISADE_DEMO_MODE on, a user-session mutation 403s while an agent ingest still
 succeeds. Reuses api_test's isolated-DB harness.
 """
+
 from __future__ import annotations
 
 import os
+from datetime import UTC
 
 from sqlalchemy import select
 
@@ -30,9 +32,7 @@ from app.seed import seed_demo
 
 def _counts(model):
     with db_module.SessionLocal() as db:
-        return len(
-            db.execute(select(model).where(model.org_id == DEMO_ORG_ID)).scalars().all()
-        )
+        return len(db.execute(select(model).where(model.org_id == DEMO_ORG_ID)).scalars().all())
 
 
 # 1) Seeding populates assets/findings/posture; re-running is a no-op.
@@ -64,14 +64,14 @@ def test_seed_populates_and_is_idempotent():
 def test_seed_survives_existing_snapshot():
     client, db_path = _make_client()
     try:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         with db_module.SessionLocal() as db:
             db.add(
                 PostureSnapshot(
                     org_id=DEMO_ORG_ID,
-                    day=datetime.now(timezone.utc).date().isoformat(),
-                    captured_at=datetime.now(timezone.utc),
+                    day=datetime.now(UTC).date().isoformat(),
+                    captured_at=datetime.now(UTC),
                     score=100,
                     critical=0,
                     high=0,
@@ -128,9 +128,7 @@ def test_demo_mode_blocks_user_mutation_not_agent():
             assert client.get("/v1/auth/me", headers=sess).json()["demo_mode"] is True
 
             # A user-session mutation on the demo org is rejected.
-            r = client.post(
-                "/v1/agents/enroll-tokens", json={"label": "x"}, headers=sess
-            )
+            r = client.post("/v1/agents/enroll-tokens", json={"label": "x"}, headers=sess)
             assert r.status_code == 403, r.text
             assert r.json()["detail"] == "demo is read-only", r.json()
 

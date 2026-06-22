@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import func, select, text
@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from .. import audit, encryption, snapshots
 from ..db import get_db
 from ..models import Agent, Asset, AuditLog, Detection, Finding, Org, User
-from ..tenancy import current_org, current_user, require_role
 from ..schemas import (
     AgentRow,
     AgentsList,
@@ -26,6 +25,7 @@ from ..schemas import (
     PostureSummary,
     RescanResponse,
 )
+from ..tenancy import current_org, current_user, require_role
 
 # UI BFF read APIs: authenticated with a user session bearer, scoped to the
 # session's active org (current_org).
@@ -40,7 +40,7 @@ ONLINE_WINDOW_S = 90
 def _iso(dt: datetime | None) -> str | None:
     if dt is None:
         return None
-    return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).isoformat()
+    return (dt if dt.tzinfo else dt.replace(tzinfo=UTC)).isoformat()
 
 
 def _finding_row(db: Session, f: Finding) -> FindingRow:
@@ -70,15 +70,11 @@ def _finding_row(db: Session, f: Finding) -> FindingRow:
 
 
 @router.get("/assets", response_model=AssetsList)
-def list_assets(
-    org: Org = Depends(current_org), db: Session = Depends(get_db)
-) -> AssetsList:
+def list_assets(org: Org = Depends(current_org), db: Session = Depends(get_db)) -> AssetsList:
     assets = db.execute(select(Asset).where(Asset.org_id == org.id)).scalars().all()
     rows: list[AssetRow] = []
     for a in assets:
-        findings = db.execute(
-            select(Finding).where(Finding.asset_id == a.id)
-        ).scalars().all()
+        findings = db.execute(select(Finding).where(Finding.asset_id == a.id)).scalars().all()
         crit = sum(1 for f in findings if f.severity == "critical" and f.status in ACTIVE_STATUSES)
         high = sum(1 for f in findings if f.severity == "high" and f.status in ACTIVE_STATUSES)
         open_count = sum(1 for f in findings if f.status in ACTIVE_STATUSES)
@@ -133,7 +129,7 @@ def mute_finding(
         raise HTTPException(status_code=404, detail="finding not found")
     f.status = "muted"
     f.mute_reason = body.reason
-    f.mute_until = datetime.now(timezone.utc) + timedelta(seconds=body.ttl_s)
+    f.mute_until = datetime.now(UTC) + timedelta(seconds=body.ttl_s)
     audit.record(db, org_id=org.id, actor=user.email, action="finding.mute", target=finding_id)
     db.commit()
     return _finding_row(db, f)
@@ -148,9 +144,7 @@ def rescan(
     # UI-initiated rescan: clear each agent's per-cycle guards so the next
     # heartbeat re-issues discover/scan jobs. Agents pull on their own cadence,
     # so this is a nudge, not an immediate scan.
-    agents = db.execute(
-        select(Agent).where(Agent.org_id == org.id)
-    ).scalars().all()
+    agents = db.execute(select(Agent).where(Agent.org_id == org.id)).scalars().all()
     for a in agents:
         a.last_scan_issued_at = None
         a.last_discover_at = None
@@ -162,12 +156,16 @@ def rescan(
 def posture_summary(
     org: Org = Depends(current_org), db: Session = Depends(get_db)
 ) -> PostureSummary:
-    findings = db.execute(
-        select(Finding).where(
-            Finding.org_id == org.id,
-            Finding.status.in_(ACTIVE_STATUSES),
+    findings = (
+        db.execute(
+            select(Finding).where(
+                Finding.org_id == org.id,
+                Finding.status.in_(ACTIVE_STATUSES),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     crit = sum(1 for f in findings if f.severity == "critical")
     high = sum(1 for f in findings if f.severity == "high")
@@ -233,17 +231,15 @@ def list_detections(
 
 
 @router.get("/agents", response_model=AgentsList)
-def list_agents(
-    org: Org = Depends(current_org), db: Session = Depends(get_db)
-) -> AgentsList:
-    agents = db.execute(
-        select(Agent).where(Agent.org_id == org.id)
-    ).scalars().all()
-    now = datetime.now(timezone.utc)
+def list_agents(org: Org = Depends(current_org), db: Session = Depends(get_db)) -> AgentsList:
+    agents = db.execute(select(Agent).where(Agent.org_id == org.id)).scalars().all()
+    now = datetime.now(UTC)
     rows: list[AgentRow] = []
     for a in agents:
-        last = None if a.last_seen is None else (
-            a.last_seen if a.last_seen.tzinfo else a.last_seen.replace(tzinfo=timezone.utc)
+        last = (
+            None
+            if a.last_seen is None
+            else (a.last_seen if a.last_seen.tzinfo else a.last_seen.replace(tzinfo=UTC))
         )
         online = last is not None and (now - last).total_seconds() <= ONLINE_WINDOW_S
         rows.append(
@@ -267,12 +263,16 @@ def list_audit(
 ) -> AuditLogList:
     # Admin-only view of the org's privileged-action trail, newest first. RLS
     # (migration 0010) also clips this to current_org on Postgres.
-    entries = db.execute(
-        select(AuditLog)
-        .where(AuditLog.org_id == org.id)
-        .order_by(AuditLog.at.desc())
-        .limit(limit)
-    ).scalars().all()
+    entries = (
+        db.execute(
+            select(AuditLog)
+            .where(AuditLog.org_id == org.id)
+            .order_by(AuditLog.at.desc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
     return AuditLogList(
         entries=[
             AuditEntryRow(id=e.id, actor=e.actor, action=e.action, target=e.target, at=_iso(e.at))

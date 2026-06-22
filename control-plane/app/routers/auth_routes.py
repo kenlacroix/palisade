@@ -51,9 +51,7 @@ def _memberships(db: Session, user_id: str) -> list[MembershipRow]:
 
 def _role_for(db: Session, user_id: str, org_id: str) -> str:
     m = db.execute(
-        select(Membership).where(
-            Membership.user_id == user_id, Membership.org_id == org_id
-        )
+        select(Membership).where(Membership.user_id == user_id, Membership.org_id == org_id)
     ).scalar_one_or_none()
     if m is None:
         raise HTTPException(status_code=403, detail="not a member of this org")
@@ -75,7 +73,9 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
     # Audit the session under the active org. No request org context exists yet,
     # so set the RLS GUC explicitly for the WITH CHECK insert policy (Postgres).
     _set_rls_org(db, active.org_id)
-    audit.record(db, org_id=active.org_id, actor=user.email, action="session.create", target=active.org_name)
+    audit.record(
+        db, org_id=active.org_id, actor=user.email, action="session.create", target=active.org_name
+    )
     db.commit()
     _set_session_cookie(response, sess.token)
     return SessionInfo(
@@ -90,9 +90,7 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
 
 
 @router.post("/logout", status_code=204)
-def logout(
-    sess: UserSession = Depends(current_session), db: Session = Depends(get_db)
-) -> Response:
+def logout(sess: UserSession = Depends(current_session), db: Session = Depends(get_db)) -> Response:
     db.delete(sess)
     db.commit()
     resp = Response(status_code=204)

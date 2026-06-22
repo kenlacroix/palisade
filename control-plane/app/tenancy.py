@@ -7,13 +7,14 @@ request's active org comes from its session; `current_org` resolves it and, on
 Postgres, sets the `app.current_org_id` GUC so Row-Level Security (migration
 0003) enforces isolation at the database layer too.
 """
+
 from __future__ import annotations
 
 import hashlib
 import hmac
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request
 from sqlalchemy import select, text
@@ -49,11 +50,11 @@ def verify_password(password: str, encoded: str) -> bool:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _aware(dt: datetime) -> datetime:
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
 def create_session(db: Session, user: User, org_id: str) -> UserSession:
@@ -94,7 +95,9 @@ def current_session(
     return sess
 
 
-def current_user(sess: UserSession = Depends(current_session), db: Session = Depends(get_db)) -> User:
+def current_user(
+    sess: UserSession = Depends(current_session), db: Session = Depends(get_db)
+) -> User:
     user = db.get(User, sess.user_id)
     if user is None:
         raise HTTPException(status_code=401, detail="user not found")
@@ -135,17 +138,15 @@ def current_org(
     # user-session mutating endpoint depends on current_org, while agent
     # endpoints authenticate via require_agent and never reach here — so the live
     # demo loop (enroll/heartbeat/assets/findings) keeps writing.
-    if (
-        config.demo_mode()
-        and org.id == DEMO_ORG_ID
-        and request.method in _MUTATING_METHODS
-    ):
+    if config.demo_mode() and org.id == DEMO_ORG_ID and request.method in _MUTATING_METHODS:
         raise HTTPException(status_code=403, detail="demo is read-only")
     _set_rls_org(db, org.id)
     return org
 
 
-def current_role(sess: UserSession = Depends(current_session), db: Session = Depends(get_db)) -> str:
+def current_role(
+    sess: UserSession = Depends(current_session), db: Session = Depends(get_db)
+) -> str:
     membership = db.execute(
         select(Membership).where(
             Membership.user_id == sess.user_id, Membership.org_id == sess.org_id

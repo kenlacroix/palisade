@@ -6,6 +6,7 @@ Run with:  python -m app.smoke_test
 or:        pytest app/smoke_test.py
 Uses an isolated temp sqlite DB so it never touches palisade.db.
 """
+
 from __future__ import annotations
 
 import os
@@ -61,9 +62,11 @@ def _run(client, finding_fingerprint):
     auth = {"Authorization": f"Bearer {secret}"}
 
     # bad token must 401
-    bad = client.post(f"/v1/agents/{agent_id}/heartbeat",
-                      json={"agent_version": "0.1.0", "status": "idle"},
-                      headers={"Authorization": "Bearer nope"})
+    bad = client.post(
+        f"/v1/agents/{agent_id}/heartbeat",
+        json={"agent_version": "0.1.0", "status": "idle"},
+        headers={"Authorization": "Bearer nope"},
+    )
     assert bad.status_code == 401, bad.text
 
     # 2) heartbeat -> expect a discover job

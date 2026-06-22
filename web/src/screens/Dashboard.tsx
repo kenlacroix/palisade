@@ -8,9 +8,7 @@ function Sparkline({ data }: { data: number[] }) {
   const w = 320;
   const h = 48;
   const step = w / (data.length - 1);
-  const points = data
-    .map((v, i) => `${i * step},${h - (v / max) * (h - 4) - 2}`)
-    .join(" ");
+  const points = data.map((v, i) => `${i * step},${h - (v / max) * (h - 4) - 2}`).join(" ");
   return (
     <svg width={w} height={h} className="overflow-visible">
       <polyline points={points} fill="none" stroke="#f59e0b" strokeWidth="1.5" />
@@ -28,7 +26,8 @@ export default function Dashboard({
   const posture = useApi(fetchPostureSummary, [], { pollMs: 10000 });
   const findings = useApi(fetchFindings, [], { pollMs: 10000 });
 
-  if (posture.error) return <div className="text-red-400">Failed to load posture: {posture.error}</div>;
+  if (posture.error)
+    return <div className="text-red-400">Failed to load posture: {posture.error}</div>;
   if (!posture.data) return <div className="text-slate-500">Loading posture…</div>;
 
   const p = posture.data;
@@ -77,7 +76,9 @@ export default function Dashboard({
         </div>
         <Card>
           {findings.error ? (
-            <div className="px-4 py-3 text-sm text-red-400">Failed to load findings: {findings.error}</div>
+            <div className="px-4 py-3 text-sm text-red-400">
+              Failed to load findings: {findings.error}
+            </div>
           ) : attention.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-slate-500">
               {findings.loading ? "Loading findings…" : "Nothing open. Clean."}
@@ -92,8 +93,12 @@ export default function Dashboard({
                   >
                     <Dot severity={f.severity} />
                     <span className="font-medium text-slate-100">{f.title}</span>
-                    <span className="font-mono text-xs text-slate-500">{f.host}:{f.port}</span>
-                    <span className="ml-auto text-xs text-slate-500">{relativeTime(f.first_seen)}</span>
+                    <span className="font-mono text-xs text-slate-500">
+                      {f.host}:{f.port}
+                    </span>
+                    <span className="ml-auto text-xs text-slate-500">
+                      {relativeTime(f.first_seen)}
+                    </span>
                     <span className="text-slate-600">›</span>
                   </button>
                 </li>

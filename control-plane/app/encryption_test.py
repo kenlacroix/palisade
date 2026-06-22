@@ -10,6 +10,7 @@ or:        pytest app/encryption_test.py
 
 Uses an isolated temp sqlite DB and exercises the module directly — no HTTP.
 """
+
 from __future__ import annotations
 
 import base64
@@ -23,9 +24,11 @@ _tmp.close()
 os.environ["DATABASE_URL"] = f"sqlite:///{_tmp.name}"
 os.environ.pop("PALISADE_EVIDENCE_KEK", None)
 
-from app import config  # noqa: E402
+from app import (
+    config,  # noqa: E402
+    encryption,  # noqa: E402
+)
 from app import db as db_module  # noqa: E402
-from app import encryption  # noqa: E402
 from app.models import DEMO_ORG_ID, Finding, Org, OrgEncryptionKey  # noqa: E402
 
 _KEK_B64 = base64.b64encode(b"\x11" * 32).decode()
