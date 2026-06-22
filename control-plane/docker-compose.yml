@@ -58,6 +58,8 @@ services:
       PALISADE_MTLS_HEADER: ${PALISADE_MTLS_HEADER:-x-client-cert}
       PALISADE_MTLS_CERT_DAYS: ${PALISADE_MTLS_CERT_DAYS:-397}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      PALISADE_SEED_DEMO: ${PALISADE_SEED_DEMO:-}
+      PALISADE_DEMO_MODE: ${PALISADE_DEMO_MODE:-}
     depends_on:
       postgres:
         condition: service_healthy
