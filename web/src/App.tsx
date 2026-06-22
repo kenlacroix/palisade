@@ -205,7 +205,7 @@ function Shell({
           ) : view === "members" ? (
             <Members />
           ) : (
-            <AddAgent />
+            <AddAgent demoMode={session.demo_mode ?? false} />
           )}
         </div>
       </main>

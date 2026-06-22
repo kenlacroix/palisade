@@ -1,0 +1,85 @@
+#!/bin/sh
+# Palisade agent installer. Served at https://trypalisade.dev/install:
+#
+#   curl -fsSL https://trypalisade.dev/install | sh
+#
+# Detects OS/arch and puts the `palisade` binary on PATH, preferring a prebuilt
+# release asset and falling back to a source build (needs Go 1.22+) when no
+# binary is published for this platform. Then enroll:
+#
+#   palisade enroll --token <token> --server https://api.trypalisade.dev
+set -eu
+
+REPO="kenlacroix/palisade"
+BIN="palisade"
+VERSION="${PALISADE_VERSION:-latest}"
+
+log() { printf '[palisade] %s\n' "$1" >&2; }
+die() { printf '[palisade] error: %s\n' "$1" >&2; exit 1; }
+
+# --- detect platform ---
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
+case "$os" in
+  linux | darwin) ;;
+  *) die "unsupported OS: $os (Linux and macOS only)" ;;
+esac
+arch=$(uname -m)
+case "$arch" in
+  x86_64 | amd64) arch="amd64" ;;
+  aarch64 | arm64) arch="arm64" ;;
+  *) die "unsupported architecture: $arch" ;;
+esac
+asset="${BIN}-${os}-${arch}"
+
+# --- pick an install dir already on PATH ---
+if [ -d /usr/local/bin ] && [ -w /usr/local/bin ]; then
+  dest="/usr/local/bin"; sudo=""
+elif command -v sudo >/dev/null 2>&1; then
+  dest="/usr/local/bin"; sudo="sudo"
+else
+  dest="${HOME}/.local/bin"; sudo=""
+  mkdir -p "$dest"
+fi
+
+install_binary() { # <src-file>
+  chmod +x "$1"
+  $sudo mv "$1" "${dest}/${BIN}"
+  log "installed ${BIN} to ${dest}/${BIN}"
+  case ":${PATH}:" in
+    *:"${dest}":*) ;;
+    *) log "note: ${dest} is not on your PATH; add it or run ${dest}/${BIN} directly" ;;
+  esac
+}
+
+build_from_source() {
+  command -v go >/dev/null 2>&1 || die "Go 1.22+ required to build from source: https://go.dev/dl/"
+  command -v git >/dev/null 2>&1 || die "git required to build from source"
+  src=$(mktemp -d)
+  trap 'rm -rf "$src"' EXIT
+  log "cloning ${REPO}"
+  git clone --depth 1 "https://github.com/${REPO}.git" "$src" >/dev/null 2>&1 || die "clone failed"
+  log "building from source (go build)"
+  out="${src}/${BIN}"
+  ( cd "${src}/agent" && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$out" ./cmd/palisade ) ||
+    die "build failed"
+  install_binary "$out"
+}
+
+# --- install: prefer a prebuilt release, fall back to source ---
+if [ "$VERSION" = "latest" ]; then
+  url="https://github.com/${REPO}/releases/latest/download/${asset}"
+else
+  url="https://github.com/${REPO}/releases/download/${VERSION}/${asset}"
+fi
+
+tmp=$(mktemp)
+if curl -fsSL "$url" -o "$tmp" 2>/dev/null; then
+  log "downloaded ${asset} (${VERSION})"
+  install_binary "$tmp"
+else
+  rm -f "$tmp"
+  log "no prebuilt ${asset} for release '${VERSION}'; building from source"
+  build_from_source
+fi
+
+log "done. Next: ${BIN} enroll --token <token> --server https://api.trypalisade.dev"

@@ -377,8 +377,9 @@ GET/POST/PATCH/DELETE /v1/alert-rules[/{id}]                     (admin+ to muta
 ┌ Add an agent ────────────────────────────────────────────┐
 │ 1. Run on the host you want to monitor:                   │
 │                                                           │
-│    curl -fsSL https://palisade.sh/install | sh \          │
-│      && palisade enroll --token  PLS-7F3A-9C21-LK48       │
+│    curl -fsSL https://trypalisade.dev/install | sh \      │
+│      && palisade enroll --token PLS-7F3A-9C21-LK48 \      │
+│         --server https://api.trypalisade.dev             │
 │                                                           │
 │    (token expires in 15 min, single use)                 │
 │                                                           │

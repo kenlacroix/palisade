@@ -36,7 +36,7 @@ GOOS=linux GOARCH=arm64 go build -o palisade-arm64 ./cmd/palisade
 ### 1. Enroll (once)
 
 ```sh
-palisade enroll --token PLS-7F3A-9C21-LK48 --server https://control.palisade.sh
+palisade enroll --token PLS-7F3A-9C21-LK48 --server https://api.trypalisade.dev
 ```
 
 This calls `POST /v1/agents/enroll` and stores `{agent_id, agent_secret, server}`
