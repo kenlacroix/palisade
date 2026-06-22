@@ -561,6 +561,27 @@ def test_production_refuses_demo_enroll_token():
         _cleanup(db_path)
 
 
+def test_production_refuses_default_demo_password():
+    import pytest
+
+    from app.main import _bootstrap
+
+    client, db_path = _make_client()
+    try:
+        # Strong enroll token clears the token guard; the default demo password
+        # must still block boot in production.
+        os.environ["PALISADE_ENV"] = "production"
+        os.environ["PALISADE_ENROLL_TOKENS"] = "PLS-strong-unique-xyz"
+        try:
+            with pytest.raises(RuntimeError, match="password"):
+                _bootstrap()
+        finally:
+            os.environ.pop("PALISADE_ENV", None)
+            os.environ.pop("PALISADE_ENROLL_TOKENS", None)
+    finally:
+        _cleanup(db_path)
+
+
 def _seed_user(email: str) -> str:
     """Insert a passwordless User (no membership) and return its id."""
     from app.models import User
@@ -779,6 +800,7 @@ if __name__ == "__main__":
     test_expired_enroll_token_rejected()
     test_bootstrap_token_carries_ttl_and_rearms()
     test_production_refuses_demo_enroll_token()
+    test_production_refuses_default_demo_password()
     test_login_writes_session_audit()
     test_audit_endpoint_lists_actions_newest_first()
     test_audit_endpoint_requires_session()

@@ -6,7 +6,6 @@ set -eu
 
 : "${PALISADE_SERVER:?PALISADE_SERVER must be set (control plane base URL)}"
 : "${PALISADE_ENROLL_TOKEN:=PLS-DEMO}"
-export PALISADE_ENROLL_TOKEN
 : "${PALISADE_HOME:=/var/lib/palisade}"
 export PALISADE_HOME
 
@@ -42,7 +41,9 @@ if [ -f "${PALISADE_HOME}/config.json" ]; then
   echo "palisade-demo: already enrolled (${PALISADE_HOME}/config.json present), skipping enroll"
 else
   echo "palisade-demo: enrolling"
-  if ! palisade enroll --server "$PALISADE_SERVER"; then
+  # Scope the token to the enroll process only — not exported, so the long-lived
+  # `palisade run` below never carries it in its environment (/proc/<pid>/environ).
+  if ! PALISADE_ENROLL_TOKEN="$PALISADE_ENROLL_TOKEN" palisade enroll --server "$PALISADE_SERVER"; then
     if [ -f "${PALISADE_HOME}/config.json" ]; then
       echo "palisade-demo: enroll reported an error but config.json exists; continuing"
     else

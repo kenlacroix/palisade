@@ -58,7 +58,8 @@ def is_production() -> bool:
 # --- multi-tenancy (M1) ---
 # Bootstrap seeds this user into the demo org so the demo logs in with one click.
 DEMO_USER_EMAIL = os.environ.get("PALISADE_DEMO_USER_EMAIL", "demo@palisade.local")
-DEMO_USER_PASSWORD = os.environ.get("PALISADE_DEMO_USER_PASSWORD", "palisade")
+DEMO_USER_PASSWORD_DEFAULT = "palisade"
+DEMO_USER_PASSWORD = os.environ.get("PALISADE_DEMO_USER_PASSWORD", DEMO_USER_PASSWORD_DEFAULT)
 # Session lifetime for the web UI bearer token (default 7 days).
 SESSION_TTL_S = int(os.environ.get("PALISADE_SESSION_TTL_S", str(7 * 24 * 3600)))
 

@@ -64,12 +64,13 @@ sha256_of() { # <file> -> prints hex digest
 verify_checksum() { # <file> <asset-name>
   sums=$(mktemp)
   curl -fsSL "$sums_url" -o "$sums" 2>/dev/null ||
-    { rm -f "$sums"; die "could not download SHA256SUMS to verify ${2}"; }
+    { rm -f "$sums" "$1"; die "could not download SHA256SUMS to verify ${2}"; }
   want=$(awk -v a="$2" '$2 == a || $2 == "*" a {print $1}' "$sums" | head -n1)
   rm -f "$sums"
-  [ -n "$want" ] || die "no checksum for ${2} in SHA256SUMS"
+  [ -n "$want" ] || { rm -f "$1"; die "no checksum for ${2} in SHA256SUMS"; }
   got=$(sha256_of "$1")
   if [ "$want" != "$got" ]; then
+    rm -f "$1"
     die "checksum mismatch for ${2}: expected ${want}, got ${got}"
   fi
   log "verified ${2} (sha256 ${got})"

@@ -45,14 +45,19 @@ def _bootstrap() -> None:
         ).scalar_one_or_none() is None:
             db.add(Membership(user_id=demo.id, org_id=DEMO_ORG_ID, role="owner"))
 
-        # Production must not boot with the well-known demo enroll token: it is a
-        # static, publicly known, reused secret. Force operators to set strong,
-        # unique PALISADE_ENROLL_TOKENS.
-        if config.is_production() and "PLS-DEMO" in config.enroll_tokens():
-            raise RuntimeError(
-                "refusing to seed the well-known 'PLS-DEMO' enroll token in production; "
-                "set PALISADE_ENROLL_TOKENS to strong, unique values"
-            )
+        # Production must not boot with well-known demo secrets — the default
+        # enroll token and demo password are static, public, reused values.
+        if config.is_production():
+            if "PLS-DEMO" in config.enroll_tokens():
+                raise RuntimeError(
+                    "refusing to seed the well-known 'PLS-DEMO' enroll token in production; "
+                    "set PALISADE_ENROLL_TOKENS to strong, unique values"
+                )
+            if config.DEMO_USER_PASSWORD == config.DEMO_USER_PASSWORD_DEFAULT:
+                raise RuntimeError(
+                    "refusing to seed the demo user with the default password in production; "
+                    "set PALISADE_DEMO_USER_PASSWORD to a strong value (or remove the demo user)"
+                )
 
         # Seed single-use enroll tokens from env into the demo org. Bootstrap
         # tokens carry a TTL and are re-armed on each boot so a restart re-enables
