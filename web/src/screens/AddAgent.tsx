@@ -2,8 +2,9 @@ import { mintEnrollToken, useApi } from "../api.ts";
 import { Card } from "../ui.tsx";
 
 // Read-only demo can't mint a token (POST is blocked on the demo org), so we
-// show a clearly-labelled sample of the real `PLS-<hex>` shape instead.
-const DEMO_TOKEN = "PLS-DEMO00000000000000000000";
+// show a non-runnable placeholder rather than a real-looking token — a copied
+// demo command then can't half-work (401) against the hosted API.
+const DEMO_TOKEN = "<your-enroll-token>";
 
 function expiryNote(expiresAt: string | null): string {
   if (!expiresAt) return "single use";
@@ -36,7 +37,7 @@ export default function AddAgent({ demoMode = false }: { demoMode?: boolean }) {
             </pre>
             <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
               {demoMode ? (
-                <span>Sample token · read-only demo. Run Palisade on your own host to enroll a live agent.</span>
+                <span>Read-only demo — enrolling is disabled. Deploy your own Palisade (or sign in to a workspace) and mint a real token under <span className="text-slate-300">Add agent</span>.</span>
               ) : error ? (
                 <span className="text-rose-400">Could not mint a token: {error}</span>
               ) : (
