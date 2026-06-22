@@ -330,6 +330,27 @@ class SwitchOrgRequest(BaseModel):
     org_id: str
 
 
+class MemberRow(BaseModel):
+    user_id: str
+    email: str
+    name: str
+    role: Role
+    created_at: str | None
+
+
+class MembersList(BaseModel):
+    members: list[MemberRow]
+
+
+class MemberCreate(BaseModel):
+    email: str
+    role: Role = "viewer"
+
+
+class MemberRoleUpdate(BaseModel):
+    role: Role
+
+
 # --- alerting ---
 class AlertChannelCreate(BaseModel):
     type: Literal["telegram", "email", "webhook"]
@@ -406,3 +427,15 @@ class AlertsList(BaseModel):
 class ChannelTestResponse(BaseModel):
     ok: bool
     error: str | None = None
+
+
+class AuditEntryRow(BaseModel):
+    id: str
+    actor: str
+    action: str
+    target: str | None
+    at: str | None
+
+
+class AuditLogList(BaseModel):
+    entries: list[AuditEntryRow]

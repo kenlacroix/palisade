@@ -4,7 +4,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -81,6 +81,28 @@ def mint_enroll_token(
     )
     db.commit()
     return _token_row(token)
+
+
+@router.delete("/enroll-tokens/{token}", status_code=204)
+def revoke_enroll_token(
+    token: str = Path(...),
+    org: Org = Depends(current_org),
+    user: User = Depends(current_user),
+    _: str = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> Response:
+    # Revoke an unused enroll token so it can never mint an agent. A token that
+    # already enrolled an agent is spent, not revocable — 404 either way to avoid
+    # leaking which tokens exist.
+    row = db.get(EnrollToken, token)
+    if row is None or row.org_id != org.id or row.used_at is not None:
+        raise HTTPException(status_code=404, detail="enroll token not found")
+    db.delete(row)
+    audit.record(
+        db, org_id=org.id, actor=user.email, action="enroll_token.revoke", target=row.label or token[:8]
+    )
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/enroll", response_model=EnrollResponse)

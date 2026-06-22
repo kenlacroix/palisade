@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import audit
 from ..db import get_db
 from ..models import Membership, Org, User, UserSession
 from ..schemas import (
@@ -14,7 +15,13 @@ from ..schemas import (
     SwitchOrgRequest,
     UserInfo,
 )
-from ..tenancy import create_session, current_session, current_user, verify_password
+from ..tenancy import (
+    _set_rls_org,
+    create_session,
+    current_session,
+    current_user,
+    verify_password,
+)
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
@@ -51,6 +58,10 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> SessionInfo:
     active = memberships[0]
 
     sess = create_session(db, user, active.org_id)
+    # Audit the session under the active org. No request org context exists yet,
+    # so set the RLS GUC explicitly for the WITH CHECK insert policy (Postgres).
+    _set_rls_org(db, active.org_id)
+    audit.record(db, org_id=active.org_id, actor=user.email, action="session.create", target=active.org_name)
     db.commit()
     return SessionInfo(
         token=sess.token,

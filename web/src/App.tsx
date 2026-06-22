@@ -16,15 +16,19 @@ import FindingDetail from "./screens/FindingDetail.tsx";
 import Detections from "./screens/Detections.tsx";
 import AddAgent from "./screens/AddAgent.tsx";
 import Alerts from "./screens/Alerts.tsx";
+import Audit from "./screens/Audit.tsx";
+import Members from "./screens/Members.tsx";
 import Login from "./screens/Login.tsx";
 
-export type View = "dashboard" | "assets" | "detections" | "alerts" | "agent";
+export type View = "dashboard" | "assets" | "detections" | "alerts" | "audit" | "members" | "agent";
 
-const NAV: { key: View; label: string; icon: string }[] = [
+const NAV: { key: View; label: string; icon: string; adminOnly?: boolean }[] = [
   { key: "dashboard", label: "Dashboard", icon: "▤" },
   { key: "assets", label: "Assets", icon: "▦" },
   { key: "detections", label: "Detections", icon: "⌖" },
   { key: "alerts", label: "Alerts", icon: "✦" },
+  { key: "audit", label: "Audit", icon: "☰", adminOnly: true },
+  { key: "members", label: "Members", icon: "◍", adminOnly: true },
   { key: "agent", label: "Add agent", icon: "＋" },
 ];
 
@@ -108,6 +112,9 @@ function Shell({
     onSession(await switchOrg(org_id));
   };
 
+  const isAdmin = session.role === "owner" || session.role === "admin";
+  const nav = NAV.filter((n) => !n.adminOnly || isAdmin);
+
   return (
     <div className="flex h-full">
       <aside className="flex w-56 shrink-0 flex-col border-r border-ink-700 bg-ink-800 p-3">
@@ -116,7 +123,7 @@ function Shell({
           <span className="text-lg font-semibold tracking-tight">Palisade</span>
         </div>
         <nav className="flex flex-col gap-1">
-          {NAV.map((n) => (
+          {nav.map((n) => (
             <button
               key={n.key}
               onClick={() => {
@@ -192,6 +199,10 @@ function Shell({
             <Detections />
           ) : view === "alerts" ? (
             <Alerts role={session.role} />
+          ) : view === "audit" ? (
+            <Audit />
+          ) : view === "members" ? (
+            <Members />
           ) : (
             <AddAgent />
           )}

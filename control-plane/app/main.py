@@ -12,7 +12,7 @@ from .config import cors_origins
 from .db import SessionLocal, init_db
 from .models import DEMO_ORG_ID, EnrollToken, Membership, Org, User
 from .queue import close_pool, init_pool
-from .routers import agents, alerts, auth_routes, catalog, detections, read, scans
+from .routers import agents, alerts, auth_routes, catalog, detections, members, read, scans
 from .tenancy import hash_password
 
 
@@ -89,6 +89,7 @@ app.include_router(detections.router)
 app.include_router(scans.router)
 app.include_router(read.router)
 app.include_router(alerts.router)
+app.include_router(members.router)
 
 
 @app.get("/healthz")

@@ -4,11 +4,12 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from .. import audit
 from ..catalog import bundle_version
 from ..config import ANTHROPIC_API_KEY, DRAFT_MODEL
 from ..db import get_db
-from ..models import Detection, User
-from ..tenancy import current_user, require_role
+from ..models import Detection, Org, User
+from ..tenancy import current_org, current_user, require_role
 from ..schemas import (
     AcceptDetectionRequest,
     AcceptDetectionResponse,
@@ -84,6 +85,7 @@ def draft_from_cve_url(
 @router.post("", response_model=AcceptDetectionResponse)
 def accept_detection(
     body: AcceptDetectionRequest,
+    org: Org = Depends(current_org),
     user: User = Depends(current_user),
     _: str = Depends(require_role("admin")),
     db: Session = Depends(get_db),
@@ -108,6 +110,10 @@ def accept_detection(
         spec["http"] = [s.model_dump() for s in (body.http or [])]
 
     new_version = bundle_version(db) + 1
+
+    # Detections are a global catalog, but publishing one is a privileged action
+    # attributed to the acting admin's org. RLS GUC is set by current_org.
+    audit.record(db, org_id=org.id, actor=user.email, action="detection.publish", target=body.id)
 
     existing = db.get(Detection, body.id)
     if existing:
