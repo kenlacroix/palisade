@@ -1,16 +1,34 @@
+<div align="center">
+
 # Palisade
 
-**[trypalisade.dev](https://trypalisade.dev)**
+**Attack-surface monitoring for self-hosted and AI-infra services.**
+
+[![CI](https://github.com/kenlacroix/palisade/actions/workflows/ci.yml/badge.svg)](https://github.com/kenlacroix/palisade/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/kenlacroix/palisade?sort=semver&color=2da44e)](https://github.com/kenlacroix/palisade/releases)
+[![Agent: Go](https://img.shields.io/badge/agent-Go%201.22-00ADD8?logo=go&logoColor=white)](agent/)
+[![Control plane: FastAPI](https://img.shields.io/badge/control%20plane-FastAPI-009688?logo=fastapi&logoColor=white)](control-plane/)
+[![Web: React + TS](https://img.shields.io/badge/web-React%20%2B%20TS-61DAFB?logo=react&logoColor=white)](web/)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+
+**[trypalisade.dev](https://trypalisade.dev)** · [Live demo](#try-it-in-one-command) · [Quickstart](#quickstart-zero-infra-sqlite) · [Architecture](#architecture)
 
 ![Palisade demo](docs/screenshots/demo.gif)
 
-Attack-surface monitoring for self-hosted and AI-infra services. A pull-only
-agent enrolls once, discovers listening services on-host, and runs CVE
-detections locally — only normalized findings ever leave the host. A FastAPI
-control plane serves a signed detection catalog, ingests findings, scores
-posture (with real 30-day trends), alerts on new/regressed findings, and drafts
-new detections from CVE advisories with an LLM. Multi-tenant: users, orgs,
-session auth, role-based access, and Postgres row-level isolation.
+</div>
+
+A **pull-only** agent enrolls once, discovers listening services on-host, and
+runs CVE detections locally — **only normalized findings ever leave the host**.
+A FastAPI control plane serves a signed detection catalog, ingests findings,
+scores posture (with real 30-day trends), alerts on new/regressed findings, and
+drafts new detections from CVE advisories with an LLM.
+
+- **Agent-on-host, data stays put** — discovery and scanning run locally; the host's raw surface never leaves.
+- **Signed detection catalog** — Ed25519-signed bundles the agent verifies before running *any* detection; fails closed.
+- **Version-aware matching** — detections fire by service *and* version range, so `litellm <1.40.2` skips `1.41.0`.
+- **Posture, trends & alerts** — real 30-day posture scoring with channel/rule alerting on new and regressed findings.
+- **AI in the loop** — draft detections from CVE advisories and triage findings off the request path.
+- **Multi-tenant by design** — users, orgs, session auth, RBAC, and Postgres row-level isolation per `org_id`.
 
 ## Architecture
 
@@ -249,5 +267,17 @@ per-org wrapped data key, migration 0005), and **per-rule alert quiet hours**
 (deferred delivery released when the window closes, migration 0007). Not yet
 built (see `SPEC.md`): the production ops layer — IaC, a live deploy, public
 status page, observability dashboards, and runbooks.
+
+## License
+
+[Apache License 2.0](LICENSE) — © 2026 Kenneth Lacroix.
+
+---
+
+<div align="center">
+
+Built by [Kenneth Lacroix](https://kennethlacroix.me) · [trypalisade.dev](https://trypalisade.dev)
+
+</div>
 </content>
 </invoke>
