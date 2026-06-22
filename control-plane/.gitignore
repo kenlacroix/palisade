@@ -1,0 +1,5 @@
+# tunnel credentials + origin cert (secrets)
+deploy/cloudflared/*.json
+deploy/cloudflared/cert.pem
+# local database backups
+backups/

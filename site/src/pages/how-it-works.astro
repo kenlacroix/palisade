@@ -1,0 +1,195 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { SITE } from "../config";
+
+const steps = [
+  {
+    n: 1,
+    title: "Enroll",
+    desc: "The agent enrolls once with a single-use token. Enroll mints the agent into an org and issues a client cert from an internal CA for mTLS. In plaintext demo mode it falls back to a bearer agent_secret.",
+  },
+  {
+    n: 2,
+    title: "Heartbeat",
+    desc: "The agent polls the control plane for jobs. The model is pull-only: nothing is pushed to the host and no inbound ports are opened.",
+  },
+  {
+    n: 3,
+    title: "Discover job",
+    desc: "The control plane issues a discover job. The agent enumerates listening services on-host and reports assets — service plus version.",
+  },
+  {
+    n: 4,
+    title: "Scan job",
+    desc: "A heartbeat issues a scan job. Detections are matched to assets by service AND version range, so only relevant checks are dispatched.",
+  },
+  {
+    n: 5,
+    title: "Pull + verify signed catalog",
+    desc: "The agent pulls the signed detection bundle, rebuilds the canonical manifest, and verifies the Ed25519 signature against a pinned public key. If verification fails it refuses to run any detection — fail closed.",
+  },
+  {
+    n: 6,
+    title: "Run detections on-host",
+    desc: "Verified detections execute locally against the local services. Execution never leaves the host.",
+  },
+  {
+    n: 7,
+    title: "Report findings",
+    desc: "Only normalized findings leave the host. Raw evidence stays local, and is AES-256-GCM encrypted per-org at rest if stored.",
+  },
+  {
+    n: 8,
+    title: "Score + alert + triage",
+    desc: "The control plane scores posture with real 30-day trends, evaluates alert rules and delivers matching alerts in the background, and optionally AI-triages each finding off the request path.",
+  },
+];
+---
+
+<Layout
+  title="How it works"
+  description="The agent-to-control-plane loop: enroll, discover, verify the signed catalog, scan on-host, and report only normalized findings."
+>
+  <section class="border-b border-ink-800 py-20">
+    <div class="container-x">
+      <p class="eyebrow">Architecture</p>
+      <h1 class="mt-3 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+        How Palisade works
+      </h1>
+      <p class="prose-muted mt-6 max-w-2xl">
+        Palisade runs a pull-only loop between an on-host agent and the control
+        plane. The agent enrolls once, discovers its own listening services,
+        verifies a signed detection catalog, runs checks locally, and ships only
+        normalized findings. The host opens no inbound ports and raw evidence
+        never leaves the machine.
+      </p>
+    </div>
+  </section>
+
+  <section class="border-b border-ink-800 py-20">
+    <div class="container-x">
+      <h2 class="text-2xl font-semibold tracking-tight text-white">The loop</h2>
+      <p class="prose-muted mt-3 max-w-2xl">
+        Eight stages, in order, from enrollment to scored posture.
+      </p>
+      <ol class="mt-10 space-y-8">
+        {
+          steps.map((step) => (
+            <li class="flex gap-5">
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent font-mono text-sm font-semibold text-ink-900">
+                {step.n}
+              </span>
+              <div>
+                <h3 class="text-lg font-medium text-white">{step.title}</h3>
+                <p class="prose-muted mt-1 max-w-2xl">{step.desc}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <section class="border-b border-ink-800 py-20">
+    <div class="container-x">
+      <h2 class="text-2xl font-semibold tracking-tight text-white">
+        Signed catalog bundles
+      </h2>
+      <p class="prose-muted mt-4 max-w-2xl">
+        The detection catalog ships as a bundle signed with Ed25519 over a
+        canonical manifest. The agent rebuilds that manifest locally and verifies
+        the signature against a pinned public key, so the catalog can travel over
+        an untrusted channel without losing integrity.
+      </p>
+      <p class="prose-muted mt-4 max-w-2xl">The verification policy:</p>
+      <ul class="prose-muted mt-4 max-w-2xl list-disc space-y-2 pl-6">
+        <li>
+          Empty signature — refuse to scan.
+        </li>
+        <li>
+          <span class="font-mono text-slate-300">stub</span> (no signing key
+          configured) — proceed in dev mode with a warning.
+        </li>
+        <li>
+          Otherwise — verify the signature and refuse to run any detection on
+          failure.
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="border-b border-ink-800 py-20">
+    <div class="container-x">
+      <h2 class="text-2xl font-semibold tracking-tight text-white">
+        Version-aware matching
+      </h2>
+      <p class="prose-muted mt-4 max-w-2xl">
+        Detections match assets by service and version range.
+        <span class="font-mono text-slate-300">match.versions</span> accepts
+        comma- or space-separated constraints — for example
+        <span class="font-mono text-slate-300">&lt;1.40.2</span> or
+        <span class="font-mono text-slate-300">&gt;=11.1.4 &lt;15.2.3</span>.
+      </p>
+      <p class="prose-muted mt-4 max-w-2xl">
+        A <span class="font-mono text-slate-300">litellm &lt;1.40.2</span>
+        detection fires on 1.39.0 but not on 1.41.0, so checks are scoped to the
+        versions actually affected.
+      </p>
+      <div class="card mt-6 max-w-2xl border-l-2 border-l-accent">
+        <p class="prose-muted">
+          Unknown or missing asset versions fail open — the detection is scanned
+          anyway. A vulnerability is never silently skipped just because a
+          version could not be determined.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-b border-ink-800 py-20">
+    <div class="container-x">
+      <h2 class="text-2xl font-semibold tracking-tight text-white">
+        Run it yourself (Quickstart)
+      </h2>
+      <p class="prose-muted mt-4 max-w-2xl">
+        Zero infra, sqlite-backed. Requires Go 1.22+, Python 3.12, and Node 18+.
+      </p>
+
+      <h3 class="mt-8 text-lg font-medium text-white">Control plane</h3>
+      <pre class="mt-3 overflow-x-auto rounded-lg border border-ink-700 bg-ink-900 p-4 text-sm font-mono text-slate-300"><code>make venv
+make migrate
+cd control-plane && PALISADE_ENROLL_TOKENS=PLS-DEMO ./.venv/bin/uvicorn app.main:app --reload</code></pre>
+
+      <h3 class="mt-8 text-lg font-medium text-white">Web UI</h3>
+      <pre class="mt-3 overflow-x-auto rounded-lg border border-ink-700 bg-ink-900 p-4 text-sm font-mono text-slate-300"><code>cd web && npm install && npm run dev</code></pre>
+
+      <h3 class="mt-8 text-lg font-medium text-white">Or run it in Docker</h3>
+      <pre class="mt-3 overflow-x-auto rounded-lg border border-ink-700 bg-ink-900 p-4 text-sm font-mono text-slate-300"><code>cd control-plane && cp .env.example .env && docker compose up --build</code></pre>
+
+      <h3 class="mt-8 text-lg font-medium text-white">Full loop smoke test</h3>
+      <pre class="mt-3 overflow-x-auto rounded-lg border border-ink-700 bg-ink-900 p-4 text-sm font-mono text-slate-300"><code>make smoke</code></pre>
+    </div>
+  </section>
+
+  <section class="py-20">
+    <div class="container-x">
+      <h2 class="text-2xl font-semibold tracking-tight text-white">
+        See it end to end
+      </h2>
+      <p class="prose-muted mt-3 max-w-2xl">
+        Open the app to watch the loop produce posture and findings, or read the
+        spec for the full design.
+      </p>
+      <div class="mt-8 flex flex-wrap gap-4">
+        <a class="btn-primary" href={SITE.appUrl}>Open the app</a>
+        <a
+          class="btn-ghost"
+          href={`${SITE.repoUrl}/blob/main/SPEC.md`}
+          target="_blank"
+          rel="noopener"
+        >
+          Read the full spec
+        </a>
+      </div>
+    </div>
+  </section>
+</Layout>

@@ -1,0 +1,27 @@
+---
+import { SITE, NAV_LINKS } from "../config";
+---
+
+<header class="sticky top-0 z-40 border-b border-ink-800 bg-ink-900/80 backdrop-blur">
+  <nav class="container-x flex h-16 items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <span class="text-accent-fg text-xl">⬡</span>
+      <span class="text-lg font-semibold tracking-tight text-white">{SITE.name}</span>
+    </a>
+
+    <div class="flex items-center gap-1 sm:gap-2">
+      {
+        NAV_LINKS.map((link) => (
+          <a
+            href={link.href}
+            class="hidden rounded-lg px-3 py-2 text-sm text-slate-400 transition hover:text-white sm:inline-block"
+            {...("external" in link && link.external ? { target: "_blank", rel: "noopener" } : {})}
+          >
+            {link.label}
+          </a>
+        ))
+      }
+      <a href={SITE.appUrl} class="btn-primary ml-1">Open app</a>
+    </div>
+  </nav>
+</header>

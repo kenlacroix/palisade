@@ -1,0 +1,40 @@
+---
+import { SITE } from "../config";
+const year = 2026;
+---
+
+<footer class="border-t border-ink-800 bg-ink-900">
+  <div class="container-x grid gap-8 py-12 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="space-y-3">
+      <a href="/" class="flex items-center gap-2">
+        <span class="text-accent-fg text-xl">⬡</span>
+        <span class="text-lg font-semibold tracking-tight text-white">{SITE.name}</span>
+      </a>
+      <p class="max-w-xs text-sm text-slate-500">{SITE.tagline}.</p>
+    </div>
+
+    <div class="space-y-2 text-sm">
+      <div class="font-medium text-slate-300">Product</div>
+      <a href="/how-it-works" class="block text-slate-500 hover:text-slate-300">How it works</a>
+      <a href="/features" class="block text-slate-500 hover:text-slate-300">Features</a>
+      <a href={SITE.appUrl} class="block text-slate-500 hover:text-slate-300">Open app</a>
+    </div>
+
+    <div class="space-y-2 text-sm">
+      <div class="font-medium text-slate-300">Project</div>
+      <a href={SITE.repoUrl} target="_blank" rel="noopener" class="block text-slate-500 hover:text-slate-300">GitHub repo</a>
+      <a href={`${SITE.repoUrl}/blob/main/SPEC.md`} target="_blank" rel="noopener" class="block text-slate-500 hover:text-slate-300">Spec</a>
+      <a href={`${SITE.repoUrl}/blob/main/DEMO.md`} target="_blank" rel="noopener" class="block text-slate-500 hover:text-slate-300">Demo walkthrough</a>
+    </div>
+
+    <div class="space-y-2 text-sm">
+      <div class="font-medium text-slate-300">Author</div>
+      <a href={SITE.authorUrl} target="_blank" rel="noopener" class="block text-slate-500 hover:text-slate-300">{SITE.authorName}</a>
+    </div>
+  </div>
+
+  <div class="container-x flex flex-col items-start justify-between gap-2 border-t border-ink-800 py-6 text-xs text-slate-600 sm:flex-row sm:items-center">
+    <span>© {year} {SITE.authorName}. Built as a proof of concept.</span>
+    <span class="font-mono">{SITE.domain}</span>
+  </div>
+</footer>

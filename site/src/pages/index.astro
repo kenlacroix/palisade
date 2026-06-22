@@ -1,0 +1,215 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { SITE } from "../config";
+
+const loopSteps = [
+  "enroll",
+  "heartbeat",
+  "discover",
+  "assets",
+  "scan",
+  "verify catalog",
+  "findings",
+  "posture / alerts",
+];
+
+const features: { label: string; title: string; body: string }[] = [
+  {
+    label: "Trust",
+    title: "Signed detection catalog",
+    body: "Detection bundles are Ed25519-signed over a canonical manifest. The agent verifies against a pinned public key before running any detection and fails closed.",
+  },
+  {
+    label: "Accuracy",
+    title: "Version-aware matching",
+    body: "Findings are matched against the actual installed version of a discovered service, not just its presence, cutting false positives.",
+  },
+  {
+    label: "Access",
+    title: "Multi-tenant + RBAC",
+    body: "Users, orgs, and session auth with owner/admin/member/viewer roles. Postgres row-level isolation keeps each org's data separate.",
+  },
+  {
+    label: "Transport",
+    title: "Agent mTLS",
+    body: "Enrollment issues a client certificate from an internal CA. Every agent call to the control plane is mutually authenticated.",
+  },
+  {
+    label: "At rest",
+    title: "Encrypted evidence",
+    body: "Per-org AES-256-GCM encryption protects any evidence stored on the control plane. Raw evidence stays on the host by default.",
+  },
+  {
+    label: "Workflow",
+    title: "AI triage",
+    body: "A background job drafts new detections from CVE advisories and triages incoming findings, keeping the catalog and your queue current.",
+  },
+];
+---
+
+<Layout description={SITE.description}>
+  <section class="border-b border-ink-800 py-20 sm:py-28">
+    <div class="container-x">
+      <p class="eyebrow">Open-source security POC</p>
+      <h1 class="mt-4 max-w-4xl text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
+        Attack-surface monitoring for self-hosted &amp; AI infrastructure
+      </h1>
+      <p class="prose-muted mt-6 max-w-2xl text-lg">
+        {SITE.description}
+      </p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a href={SITE.appUrl} class="btn-primary">Open the app</a>
+        <a
+          href={SITE.repoUrl}
+          target="_blank"
+          rel="noopener"
+          class="btn-ghost"
+        >
+          View on GitHub
+        </a>
+      </div>
+      <p class="mt-8 font-mono text-sm text-slate-500">
+        pull-only agent · signed catalog · only findings leave the host
+      </p>
+    </div>
+  </section>
+
+  <section class="border-b border-ink-800 py-20 sm:py-28">
+    <div class="container-x">
+      <p class="eyebrow">The trust angle</p>
+      <h2 class="mt-4 max-w-2xl text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        Your data stays on your hosts
+      </h2>
+      <div class="mt-10 grid gap-5 sm:grid-cols-3">
+        <div class="card">
+          <h3 class="text-lg font-semibold text-white">Pull-only agent</h3>
+          <p class="prose-muted mt-2">
+            The Go agent enrolls once and pulls work from the control plane. No
+            inbound ports, no listener to expose on your host.
+          </p>
+        </div>
+        <div class="card">
+          <h3 class="text-lg font-semibold text-white">Local detection</h3>
+          <p class="prose-muted mt-2">
+            CVE detections run on-host against discovered services. Raw evidence
+            is read and evaluated locally and never leaves the machine.
+          </p>
+        </div>
+        <div class="card">
+          <h3 class="text-lg font-semibold text-white">
+            Only normalized findings leave
+          </h3>
+          <p class="prose-muted mt-2">
+            The agent ships normalized findings upstream — nothing else. If
+            evidence is ever stored, it is AES-256-GCM encrypted per org.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-b border-ink-800 py-20 sm:py-28">
+    <div class="container-x">
+      <p class="eyebrow">The loop</p>
+      <h2 class="mt-4 max-w-2xl text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        From enroll to posture
+      </h2>
+      <div class="mt-10 flex flex-wrap items-center gap-2">
+        {
+          loopSteps.map((step, i) => (
+            <>
+              <span class="rounded-md border border-ink-600 bg-ink-700 px-3 py-1.5 font-mono text-sm text-slate-300">
+                {step}
+              </span>
+              {i < loopSteps.length - 1 && (
+                <span class="font-mono text-sm text-accent-fg">›</span>
+              )}
+            </>
+          ))
+        }
+      </div>
+      <p class="prose-muted mt-8 max-w-2xl">
+        The agent heartbeats, discovers listening services, and reports assets.
+        Before scanning it verifies the signed catalog, then emits findings that
+        the control plane scores into posture with 30-day trends and alerts on
+        new or regressed issues.
+      </p>
+    </div>
+  </section>
+
+  <section class="border-b border-ink-800 py-20 sm:py-28">
+    <div class="container-x">
+      <p class="eyebrow">Capabilities</p>
+      <h2 class="mt-4 max-w-2xl text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        Built for engineers who run their own infra
+      </h2>
+      <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {
+          features.map((f) => (
+            <div class="card">
+              <p class="eyebrow">{f.label}</p>
+              <h3 class="mt-3 text-lg font-semibold text-white">{f.title}</h3>
+              <p class="prose-muted mt-2">{f.body}</p>
+            </div>
+          ))
+        }
+      </div>
+      <div class="mt-8">
+        <a href="/features" class="text-accent-fg hover:text-white">
+          See all capabilities →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-b border-ink-800 py-16 sm:py-20">
+    <div class="container-x">
+      <div class="card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-xl font-semibold text-white">
+            See the full architecture
+          </h2>
+          <p class="prose-muted mt-2 max-w-2xl">
+            Go agent, FastAPI control plane, signed catalog, mTLS enrollment,
+            and the data path that keeps evidence on-host.
+          </p>
+        </div>
+        <a href="/how-it-works" class="btn-ghost shrink-0">
+          Read the architecture →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-20 sm:py-28">
+    <div class="container-x text-center">
+      <p class="eyebrow">Run it yourself</p>
+      <h2 class="mx-auto mt-4 max-w-2xl text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        Clone it, enroll an agent, and watch the posture
+      </h2>
+      <div class="mt-8 flex flex-wrap justify-center gap-3">
+        <a
+          href={SITE.repoUrl}
+          target="_blank"
+          rel="noopener"
+          class="btn-primary"
+        >
+          Clone the repo
+        </a>
+        <a href={SITE.appUrl} class="btn-ghost">Open app</a>
+      </div>
+      <p class="prose-muted mx-auto mt-8 max-w-xl text-sm">
+        Palisade is a proof-of-concept built on{" "}
+        <a
+          href={SITE.authorUrl}
+          target="_blank"
+          rel="noopener"
+          class="text-accent-fg hover:text-white"
+        >
+          {SITE.authorName}'s
+        </a>{" "}
+        brand infrastructure.
+      </p>
+    </div>
+  </section>
+</Layout>

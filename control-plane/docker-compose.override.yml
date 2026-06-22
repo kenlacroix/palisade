@@ -1,0 +1,37 @@
+# Home/Proxmox overlay: publishes the control plane at api.trypalisade.dev via a
+# Cloudflare Tunnel (no port-forwarding, no exposed home IP) and runs a nightly
+# Postgres backup. Auto-merged by `docker compose` when run from this directory.
+#
+# One-time tunnel setup (on the box, see deploy/README.md):
+#   cloudflared tunnel login
+#   cloudflared tunnel create palisade            # writes <UUID>.json
+#   cp ~/.cloudflared/<UUID>.json deploy/cloudflared/palisade.json
+#   cloudflared tunnel route dns palisade api.trypalisade.dev
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]
+    volumes:
+      - ./deploy/cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - api
+
+  # Nightly pg_dump → ./backups, keeping the last 14 days. Same image as the DB
+  # so pg_dump version matches the server.
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/backup/pg_backup.sh"]
+    environment:
+      PGHOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-palisade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-palisade}
+      POSTGRES_DB: ${POSTGRES_DB:-palisade}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./deploy/backup:/backup:ro
+      - ./backups:/out
+    depends_on:
+      postgres:
+        condition: service_healthy

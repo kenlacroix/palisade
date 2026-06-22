@@ -1,0 +1,12 @@
+# Locally-managed Cloudflare Tunnel config. Mounted read-only into the
+# cloudflared container at /etc/cloudflared. The credentials JSON next to this
+# file is created by `cloudflared tunnel create palisade` and is gitignored.
+tunnel: palisade
+credentials-file: /etc/cloudflared/palisade.json
+
+# Route public hostnames to in-compose services (reached over the compose
+# network). Everything else 404s instead of leaking other services.
+ingress:
+  - hostname: api.trypalisade.dev
+    service: http://api:8000
+  - service: http_status:404
