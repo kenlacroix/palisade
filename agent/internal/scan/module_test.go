@@ -73,7 +73,7 @@ func runModule(t *testing.T, srvURL string) (Finding, bool) {
 	if err != nil {
 		t.Fatalf("parse server url: %v", err)
 	}
-	out := s.RunTarget(context.Background(), u.Host, target, map[string]catalog.Detection{det.ID: det})
+	out := s.RunTarget(context.Background(), u.Host, "", target, map[string]catalog.Detection{det.ID: det})
 	if len(out) == 0 {
 		return Finding{}, false
 	}

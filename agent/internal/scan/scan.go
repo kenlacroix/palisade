@@ -51,7 +51,7 @@ func Fingerprint(assetID, detectionID, evidenceKey string) string {
 // RunTarget evaluates every detection in a target against the asset at the
 // bare authority (e.g. "host:port"). The probe scheme is resolved per detection
 // (see schemeFor) and the full base URL is built before each engine path runs.
-func (s *Scanner) RunTarget(ctx context.Context, authority string, t catalog.ScanTarget, byID map[string]catalog.Detection) []Finding {
+func (s *Scanner) RunTarget(ctx context.Context, authority, assetScheme string, t catalog.ScanTarget, byID map[string]catalog.Detection) []Finding {
 	var out []Finding
 	for _, did := range t.DetectionIDs {
 		det, ok := byID[did]
@@ -59,7 +59,7 @@ func (s *Scanner) RunTarget(ctx context.Context, authority string, t catalog.Sca
 			log.Printf("scan: detection %q not in bundle, skipping", did)
 			continue
 		}
-		base := schemeFor(det.Scheme, authority)
+		base := schemeFor(det.Scheme, assetScheme, authority)
 		if det.Engine == "module" {
 			// Compiled modules win: multi-step logic referenced by spec_ref ships
 			// in this binary. Falling back, a declarative flow (approach B) ships
@@ -87,10 +87,14 @@ func (s *Scanner) RunTarget(ctx context.Context, authority string, t catalog.Sca
 }
 
 // schemeFor builds the full base URL for an authority ("host:port" or "host"),
-// resolving the scheme: an explicit detection scheme wins; otherwise well-known
-// TLS ports (443, 8443) imply https; everything else defaults to http.
-func schemeFor(detScheme, authority string) string {
+// resolving the scheme by precedence: an explicit detection scheme wins; else
+// the asset's discovery-observed scheme; else well-known TLS ports (443, 8443)
+// imply https; everything else defaults to http.
+func schemeFor(detScheme, assetScheme, authority string) string {
 	scheme := detScheme
+	if scheme == "" {
+		scheme = assetScheme
+	}
 	if scheme == "" {
 		switch portOf(authority) {
 		case "443", "8443":

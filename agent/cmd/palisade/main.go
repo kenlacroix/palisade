@@ -139,6 +139,8 @@ func cmdRun(args []string) error {
 		scanner: scan.New(),
 		// assetIDs is populated by discover jobs: "<host>:<port>" -> asset id.
 		assetIDs: map[string]string{},
+		// assetSchemes records the discovery-observed scheme per "<host>:<port>".
+		assetSchemes: map[string]string{},
 	}
 
 	// heartbeat_interval_s default per contract; refreshed from enroll if we
@@ -174,6 +176,7 @@ type agent struct {
 	scanner *scan.Scanner
 
 	assetIDs       map[string]string // "<host>:<port>" -> server asset id
+	assetSchemes   map[string]string // "<host>:<port>" -> observed scheme
 	catalogVersion int               // last bundle version pulled
 }
 
@@ -223,6 +226,9 @@ func (a *agent) runDiscover(ctx context.Context, job catalog.Job) {
 	}
 	for k, v := range resp.AssetIDs {
 		a.assetIDs[k] = v
+	}
+	for _, asset := range assets {
+		a.assetSchemes[asset.Host+":"+strconv.Itoa(asset.Port)] = asset.Scheme
 	}
 	log.Printf("discover %s: %d asset(s) reported", job.JobID, len(assets))
 }
@@ -278,7 +284,7 @@ func (a *agent) runScan(ctx context.Context, job catalog.Job) {
 	var findings []catalog.FindingReport
 	for _, t := range job.Payload.Targets {
 		authority := a.authorityFor(t.AssetID, addrByAsset, hostname)
-		fs := a.scanner.RunTarget(ctx, authority, t, byID)
+		fs := a.scanner.RunTarget(ctx, authority, a.assetSchemes[authority], t, byID)
 		for _, f := range fs {
 			findings = append(findings, catalog.FindingReport{
 				DetectionID: f.DetectionID,
