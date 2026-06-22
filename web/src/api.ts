@@ -1,9 +1,9 @@
 import { useEffect, useState, type DependencyList } from "react";
 import type { Severity, Exposure } from "./data.ts";
 
-// Same-origin by default; vite dev proxies /v1 to the control plane. Override
-// with VITE_API_BASE (e.g. http://nas.lab:8000) when serving the built UI.
-const BASE = import.meta.env.VITE_API_BASE ?? "";
+// Dev: same-origin (vite proxies /v1 to the control plane). Prod build defaults
+// to the hosted control plane. Override either with VITE_API_BASE.
+const BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? "https://api.trypalisade.dev" : "");
 
 const TOKEN_KEY = "palisade_token";
 let token: string | null = localStorage.getItem(TOKEN_KEY);
