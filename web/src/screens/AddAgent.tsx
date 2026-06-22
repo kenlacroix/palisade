@@ -1,15 +1,22 @@
 import { mintEnrollToken, useApi } from "../api.ts";
 import { Card } from "../ui.tsx";
 
+// Read-only demo can't mint a token (POST is blocked on the demo org), so we
+// show a clearly-labelled sample of the real `PLS-<hex>` shape instead.
+const DEMO_TOKEN = "PLS-DEMO00000000000000000000";
+
 function expiryNote(expiresAt: string | null): string {
   if (!expiresAt) return "single use";
   const mins = Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 60000));
   return `expires in ${mins} min · single use`;
 }
 
-export default function AddAgent() {
-  const { data, error, loading, refetch } = useApi(() => mintEnrollToken(), []);
-  const token = data?.token;
+export default function AddAgent({ demoMode = false }: { demoMode?: boolean }) {
+  const { data, error, loading, refetch } = useApi(
+    () => (demoMode ? Promise.resolve(null) : mintEnrollToken()),
+    [demoMode],
+  );
+  const token = demoMode ? DEMO_TOKEN : data?.token;
 
   return (
     <div className="space-y-5">
@@ -20,25 +27,30 @@ export default function AddAgent() {
           <li>
             <div className="mb-2 text-slate-300">1. Run on the host you want to monitor:</div>
             <pre className="overflow-x-auto rounded-lg bg-ink-900 p-4 font-mono text-xs text-slate-200">
-              <span className="text-slate-500">$ </span>curl -fsSL https://palisade.sh/install | sh \{"\n"}
+              <span className="text-slate-500">$ </span>curl -fsSL https://trypalisade.dev/install | sh \{"\n"}
               {"    "}&amp;&amp; palisade enroll --token{" "}
               <span className="text-accent">
-                {loading ? "generating…" : error ? "—" : token}
+                {demoMode ? token : loading ? "generating…" : error ? "—" : token}
               </span>
+              {" "}--server https://api.trypalisade.dev
             </pre>
             <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
-              {error ? (
+              {demoMode ? (
+                <span>Sample token · read-only demo. Run Palisade on your own host to enroll a live agent.</span>
+              ) : error ? (
                 <span className="text-rose-400">Could not mint a token: {error}</span>
               ) : (
                 <span>{expiryNote(data?.expires_at ?? null)}</span>
               )}
-              <button
-                onClick={refetch}
-                disabled={loading}
-                className="rounded-md border border-ink-700 px-2 py-1 text-slate-300 hover:border-ink-500 disabled:opacity-50"
-              >
-                Regenerate
-              </button>
+              {!demoMode && (
+                <button
+                  onClick={refetch}
+                  disabled={loading}
+                  className="rounded-md border border-ink-700 px-2 py-1 text-slate-300 hover:border-ink-500 disabled:opacity-50"
+                >
+                  Regenerate
+                </button>
+              )}
             </div>
           </li>
           <li className="flex items-center gap-3 text-slate-400">
