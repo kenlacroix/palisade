@@ -29,7 +29,7 @@ them.
 | --- | --- | --- |
 | `POST /v1/detections/draft` (`cve_url`) | Authenticated SSRF to cloud metadata / internal services; prompt injection | `app/netguard.py`: scheme allowlist, resolve + reject private/loopback/link-local/reserved IPs, **validated-IP pinning** into the connection, no redirect following. Returns empty on any block. |
 | Agent findings ingest (`POST /v1/scans/{id}/findings`) | A compromised agent attaches findings to another tenant's scan/assets, or overwrites another tenant's finding via a shared fingerprint | `scan_id` and every `asset_id` are bound to the agent's org at the boundary (`routers/scans.py`); dedupe is org-scoped (`ingest.py`); fingerprints are unique **per org** (`uq_finding_org_fingerprint`). |
-| Cross-tenant DB access via an app-layer bug | RLS was only `ENABLE`d, which Postgres does not apply to the table owner — and the app connects as the owner, so isolation rode entirely on Python `WHERE org_id` filters | Migration `0011` adds **`FORCE ROW LEVEL SECURITY`** on all tenant tables, making the `app.current_org_id` GUC a real DB-level backstop. Proven in CI (`app/rls_postgres_test.py`). |
+| Cross-tenant DB access via an app-layer bug | RLS was only `ENABLE`d, which Postgres does not apply to the table owner **or a superuser** — and the app connects as the superuser `palisade`, so RLS was bypassed entirely; isolation rode on Python `WHERE org_id` filters | Migration `0011` adds `FORCE ROW LEVEL SECURITY`; migration `0012` adds a NOLOGIN, NOSUPERUSER `palisade_app` role and the app **`SET LOCAL ROLE`s to it** before every tenant query (`tenancy._set_rls_org`), so the `app.current_org_id` GUC becomes a real DB-level backstop. Proven in CI (`app/rls_postgres_test.py`). |
 | Catalog bundle forgery | With no signing key set, the server signed with the **public demo seed**; agents pin the matching public key, so anyone could forge a trusted bundle | The startup preflight refuses to boot a production deployment whose `PALISADE_SIGNING_KEY` is unset or the demo seed. |
 | Stolen DB dump | The internal CA private key was stored unencrypted, letting an attacker mint trusted agent certs; evidence was plaintext | CA key and evidence are sealed with AES-256-GCM under `PALISADE_EVIDENCE_KEK` (`app/encryption.py`, `enc:v1:` format), with transparent plaintext fallback for keyless dev. |
 | Stolen bearer `agent_secret` | Authenticates as the agent over plaintext | `PALISADE_REQUIRE_MTLS` defaults **on** in production; the bearer fallback is rejected when a client cert is required. |
@@ -73,9 +73,11 @@ Set these before exposing an instance (see `control-plane/.env.example`):
 
 ## Residual risks / future work
 
-- **Run the app as a non-owner Postgres role.** `FORCE` makes RLS real today;
-  connecting as a dedicated non-owner role (the architecture the worker docs
-  already assume) would be defense-in-depth on top of it.
+- **Connect (not just `SET ROLE`) as the non-superuser role.** The app drops to
+  `palisade_app` per transaction, which makes RLS bind. Connecting as a
+  dedicated least-privilege role for the whole session (separate credentials for
+  the `migrate` step vs the app) would be stronger still, and is the natural
+  next step now that the role and grants exist.
 - **CSRF.** With cookie auth, `SameSite=Lax` + header-precedence cover the common
   cases; an explicit CSRF token on mutating endpoints would harden it further.
 - **SSRF TOCTOU.** Mitigated by pinning the validated IP into the connection;

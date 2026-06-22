@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -24,6 +25,9 @@ from .models import DEMO_ORG_ID, ROLES, Membership, Org, User, UserSession
 
 _PBKDF2_ITERATIONS = 240_000
 _MUTATING_METHODS = ("POST", "PATCH", "PUT", "DELETE")
+# Postgres role identifiers we'll inject into SET LOCAL ROLE must be plain
+# identifiers (no quoting/injection); anything else is ignored.
+_ROLE_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 # --- password hashing (stdlib pbkdf2, no extra deps) ---
@@ -100,8 +104,16 @@ def current_user(sess: UserSession = Depends(current_session), db: Session = Dep
 def _set_rls_org(db: Session, org_id: str) -> None:
     # On Postgres, scope RLS to this org for the rest of the request's
     # transaction. No-op on SQLite (RLS is enforced by query filters there).
-    if db.bind is not None and db.bind.dialect.name == "postgresql":
-        db.execute(text("SELECT set_config('app.current_org_id', :org, true)"), {"org": org_id})
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        return
+    # Drop to the non-superuser app role (migration 0012) for this transaction
+    # so RLS actually binds — the connecting role is usually the superuser/owner,
+    # which RLS (even FORCEd) does not constrain. SET LOCAL resets at commit, so
+    # this is re-applied per transaction alongside the org GUC.
+    role = config.db_app_role()
+    if role and _ROLE_IDENT.match(role):
+        db.execute(text(f"SET LOCAL ROLE {role}"))
+    db.execute(text("SELECT set_config('app.current_org_id', :org, true)"), {"org": org_id})
 
 
 def current_org(

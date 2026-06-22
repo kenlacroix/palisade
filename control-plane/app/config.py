@@ -102,6 +102,15 @@ MTLS_CERT_HEADER = os.environ.get("PALISADE_MTLS_HEADER", "x-client-cert")
 MTLS_CERT_DAYS = int(os.environ.get("PALISADE_MTLS_CERT_DAYS", "397"))
 
 
+def db_app_role() -> str:
+    # Postgres role the control plane drops to (SET LOCAL ROLE) before touching
+    # tenant data, so Row-Level Security actually binds. The connecting role is
+    # typically the cluster superuser/owner in bundled setups, which RLS (even
+    # FORCEd) does not constrain; this NOLOGIN, NOSUPERUSER role (migration 0012)
+    # is the one the policies apply to. Empty string disables the drop.
+    return os.environ.get("PALISADE_DB_APP_ROLE", "palisade_app").strip()
+
+
 def cors_origins() -> list[str]:
     raw = os.environ.get(
         "PALISADE_CORS_ORIGINS",
