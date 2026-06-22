@@ -9,10 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import require_agent
-from .. import config, mtls
+from .. import audit, config, mtls
 from ..db import get_db
-from ..models import Agent, Asset, Detection, EnrollToken, Org, Scan
-from ..tenancy import current_org, require_role
+from ..models import Agent, Asset, Detection, EnrollToken, Org, Scan, User
+from ..tenancy import current_org, current_user, require_role
 from ..version_match import service_matches
 from ..schemas import (
     AssetsRequest,
@@ -55,6 +55,7 @@ def _token_row(t: EnrollToken) -> EnrollTokenRow:
 def mint_enroll_token(
     req: EnrollTokenCreate,
     org: Org = Depends(current_org),
+    user: User = Depends(current_user),
     _: str = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ) -> EnrollTokenRow:
@@ -69,6 +70,15 @@ def mint_enroll_token(
         expires_at=_now() + timedelta(seconds=config.ENROLL_TOKEN_TTL_S),
     )
     db.add(token)
+    # Never log the token secret; the label (or its non-secret prefix) is enough
+    # to correlate the mint with the agent it later enrolls.
+    audit.record(
+        db,
+        org_id=org.id,
+        actor=user.email,
+        action="enroll_token.mint",
+        target=req.label or token.token[:8],
+    )
     db.commit()
     return _token_row(token)
 

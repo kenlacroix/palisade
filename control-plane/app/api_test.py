@@ -460,6 +460,29 @@ def test_minted_enroll_token_is_single_use():
         _cleanup(db_path)
 
 
+def test_mint_enroll_token_writes_audit_log():
+    from app.models import AuditLog
+
+    client, db_path = _make_client()
+    try:
+        with client:
+            r = client.post(
+                "/v1/agents/enroll-tokens", json={"label": "nas"}, headers=_session(client)
+            )
+            assert r.status_code == 200, r.text
+            with db_module.SessionLocal() as db:
+                rows = db.query(AuditLog).all()
+                assert len(rows) == 1, rows
+                entry = rows[0]
+                assert entry.actor == "demo@palisade.local"
+                assert entry.action == "enroll_token.mint"
+                assert entry.target == "nas"
+                # The minted secret is never recorded in the audit trail.
+                assert entry.target != r.json()["token"]
+    finally:
+        _cleanup(db_path)
+
+
 def test_mint_enroll_token_requires_admin():
     client, db_path = _make_client()
     try:
@@ -505,6 +528,7 @@ if __name__ == "__main__":
     test_mute_finding_wiring()
     test_triage_noop_when_unconfigured()
     test_minted_enroll_token_is_single_use()
+    test_mint_enroll_token_writes_audit_log()
     test_mint_enroll_token_requires_admin()
     test_expired_enroll_token_rejected()
     print("API TESTS OK")
