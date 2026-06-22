@@ -58,6 +58,36 @@ def test_seed_populates_and_is_idempotent():
         _cleanup(db_path)
 
 
+# 1b) Seeding survives a pre-existing posture snapshot (posture scoring writes
+#     today's row on any request before seeding runs; seed must not collide with
+#     the unique(org_id, day) constraint).
+def test_seed_survives_existing_snapshot():
+    client, db_path = _make_client()
+    try:
+        from datetime import datetime, timezone
+
+        with db_module.SessionLocal() as db:
+            db.add(
+                PostureSnapshot(
+                    org_id=DEMO_ORG_ID,
+                    day=datetime.now(timezone.utc).date().isoformat(),
+                    captured_at=datetime.now(timezone.utc),
+                    score=100,
+                    critical=0,
+                    high=0,
+                    medium=0,
+                    assets_count=0,
+                )
+            )
+            db.commit()
+        with db_module.SessionLocal() as db:
+            seed_demo(db)  # must not raise
+        assert _counts(Asset) >= 5
+        assert _counts(PostureSnapshot) == 30
+    finally:
+        _cleanup(db_path)
+
+
 # 2) Posture summary agrees with the seeded active findings.
 def test_seeded_posture_summary_matches():
     client, db_path = _make_client()
@@ -160,6 +190,7 @@ def test_demo_mode_blocks_user_mutation_not_agent():
 
 if __name__ == "__main__":
     test_seed_populates_and_is_idempotent()
+    test_seed_survives_existing_snapshot()
     test_seeded_posture_summary_matches()
     test_demo_mode_blocks_user_mutation_not_agent()
     print("SEED TESTS OK")
