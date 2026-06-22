@@ -6,11 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-06-22
+
 ### Added
 
 - Lint and format tooling across all components: `ruff` (control plane),
   `golangci-lint` (agent), and ESLint + Prettier (web), plus `make lint` /
   `make fmt` targets and a `lint` CI job.
+- CI now runs the web `vitest` suite and production build.
+- `CONTRIBUTING.md` and `CHANGELOG.md`.
 
 ### Changed
 
@@ -19,9 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Corrected stale `agent/README.md` notes: the module engine and Ed25519 bundle
-  verification are implemented (the agent fails closed on bad signatures), so
-  they are no longer listed as TODO.
+- The agent now reports its real version (`0.1.2`); the constant had been left at
+  `0.1.0`.
+- Corrected stale docs: `agent/README.md` (module engine and Ed25519 fail-closed
+  verification are implemented, no longer TODO) and the README Tests section.
 
 ## [0.1.1] - 2026-06-22
 
@@ -69,6 +74,7 @@ Initial release.
 - **Demo**: one-command `make demo` full stack with a seeded org and a live
   agent loop against a fake-vulnerable target.
 
-[Unreleased]: https://github.com/kenlacroix/palisade/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/kenlacroix/palisade/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/kenlacroix/palisade/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/kenlacroix/palisade/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/kenlacroix/palisade/releases/tag/v0.1.0
