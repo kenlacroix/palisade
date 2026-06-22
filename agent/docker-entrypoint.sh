@@ -40,8 +40,10 @@ echo "palisade-demo: control plane is up"
 if [ -f "${PALISADE_HOME}/config.json" ]; then
   echo "palisade-demo: already enrolled (${PALISADE_HOME}/config.json present), skipping enroll"
 else
-  echo "palisade-demo: enrolling with token ${PALISADE_ENROLL_TOKEN}"
-  if ! palisade enroll --token "$PALISADE_ENROLL_TOKEN" --server "$PALISADE_SERVER"; then
+  echo "palisade-demo: enrolling"
+  # Scope the token to the enroll process only — not exported, so the long-lived
+  # `palisade run` below never carries it in its environment (/proc/<pid>/environ).
+  if ! PALISADE_ENROLL_TOKEN="$PALISADE_ENROLL_TOKEN" palisade enroll --server "$PALISADE_SERVER"; then
     if [ -f "${PALISADE_HOME}/config.json" ]; then
       echo "palisade-demo: enroll reported an error but config.json exists; continuing"
     else

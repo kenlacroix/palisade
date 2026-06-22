@@ -1,0 +1,60 @@
+name: Release
+
+# Publish prebuilt agent binaries on a version tag. The installer
+# (site/public/install) downloads these from the release's latest/download URL.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish agent binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+          cache-dependency-path: agent/go.mod
+      - name: Build binaries
+        working-directory: agent
+        run: |
+          mkdir -p ../dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os=${target%/*}; arch=${target#*/}
+            echo "building palisade-$os-$arch"
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch \
+              go build -trimpath -ldflags "-s -w" \
+              -o "../dist/palisade-$os-$arch" ./cmd/palisade
+          done
+      - name: Checksum binaries
+        working-directory: dist
+        run: |
+          sha256sum palisade-* > SHA256SUMS
+          cat SHA256SUMS
+      - name: Sign checksums (minisign)
+        working-directory: dist
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          if [ -z "${MINISIGN_SECRET_KEY:-}" ]; then
+            echo "::warning::MINISIGN_SECRET_KEY secret not set; publishing SHA256SUMS unsigned"
+            exit 0
+          fi
+          sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+          umask 077
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > minisign.key
+          # Key is generated passwordless (minisign -G -W); GitHub's secret store
+          # is the protection. Feed an empty password on stdin and sign.
+          printf '\n' | minisign -S -s minisign.key -m SHA256SUMS \
+            -t "palisade ${{ github.ref_name }} checksums"
+          rm -f minisign.key
+          cat SHA256SUMS.minisig
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" dist/* --generate-notes --verify-tag

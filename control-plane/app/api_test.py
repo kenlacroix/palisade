@@ -512,8 +512,72 @@ def test_expired_enroll_token_rejected():
             r = _enroll_with(client, tok)
             assert r.status_code == 401, r.text
             assert "expired" in r.json()["detail"]
-            # The seeded bootstrap token has no expiry and still works.
+            # The seeded bootstrap token is freshly re-armed on boot and still works.
             assert _enroll_with(client, "PLS-DEMO").status_code == 200
+    finally:
+        _cleanup(db_path)
+
+
+def test_bootstrap_token_carries_ttl_and_rearms():
+    from datetime import datetime, timedelta, timezone
+
+    from app.main import _bootstrap
+    from app.models import EnrollToken
+    from app.routers.agents import _ensure_aware
+
+    client, db_path = _make_client()
+    try:
+        with db_module.SessionLocal() as db:
+            row = db.get(EnrollToken, "PLS-DEMO")
+            assert row is not None and row.expires_at is not None
+            backdated = datetime.now(timezone.utc) - timedelta(days=1)
+            row.expires_at = backdated
+            db.commit()
+        # A reboot re-arms the unused bootstrap token's expiry.
+        _bootstrap()
+        with db_module.SessionLocal() as db:
+            row = db.get(EnrollToken, "PLS-DEMO")
+            assert _ensure_aware(row.expires_at) > datetime.now(timezone.utc)
+    finally:
+        _cleanup(db_path)
+
+
+def test_production_refuses_demo_enroll_token():
+    import pytest
+
+    from app import config as config_module
+    from app.main import _bootstrap
+
+    client, db_path = _make_client()
+    try:
+        os.environ["PALISADE_ENV"] = "production"
+        try:
+            with pytest.raises(RuntimeError, match="PLS-DEMO"):
+                _bootstrap()
+        finally:
+            os.environ.pop("PALISADE_ENV", None)
+        assert not config_module.is_production()
+    finally:
+        _cleanup(db_path)
+
+
+def test_production_refuses_default_demo_password():
+    import pytest
+
+    from app.main import _bootstrap
+
+    client, db_path = _make_client()
+    try:
+        # Strong enroll token clears the token guard; the default demo password
+        # must still block boot in production.
+        os.environ["PALISADE_ENV"] = "production"
+        os.environ["PALISADE_ENROLL_TOKENS"] = "PLS-strong-unique-xyz"
+        try:
+            with pytest.raises(RuntimeError, match="password"):
+                _bootstrap()
+        finally:
+            os.environ.pop("PALISADE_ENV", None)
+            os.environ.pop("PALISADE_ENROLL_TOKENS", None)
     finally:
         _cleanup(db_path)
 
@@ -734,6 +798,9 @@ if __name__ == "__main__":
     test_mint_enroll_token_writes_audit_log()
     test_mint_enroll_token_requires_admin()
     test_expired_enroll_token_rejected()
+    test_bootstrap_token_carries_ttl_and_rearms()
+    test_production_refuses_demo_enroll_token()
+    test_production_refuses_default_demo_password()
     test_login_writes_session_audit()
     test_audit_endpoint_lists_actions_newest_first()
     test_audit_endpoint_requires_session()

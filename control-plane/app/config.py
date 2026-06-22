@@ -17,11 +17,15 @@ def allow_insecure_defaults() -> bool:
 
 
 def is_production() -> bool:
-    # A real (internet-exposed) deployment: Postgres-backed and not explicitly
-    # opting into insecure defaults. Dev/test runs on SQLite and the public demo
-    # sets PALISADE_ALLOW_INSECURE_DEFAULTS=1, so neither is treated as prod.
-    # Drives fail-closed defaults (mTLS required, perimeter scope deny-by-default,
-    # preflight enforcement) without breaking the SQLite dev/test path.
+    # A real (internet-exposed) deployment. True when the operator declares it
+    # via PALISADE_ENV=production, or when it's inferred from infrastructure:
+    # Postgres-backed and not explicitly opting into insecure defaults. Dev/test
+    # runs on SQLite and the public demo sets PALISADE_ALLOW_INSECURE_DEFAULTS=1,
+    # so neither is treated as prod. Drives fail-closed defaults (mTLS required,
+    # perimeter scope deny-by-default, preflight enforcement, and refusing the
+    # well-known demo enroll token/password at boot).
+    if os.environ.get("PALISADE_ENV", "dev").lower() in ("prod", "production"):
+        return True
     return DATABASE_URL.startswith("postgresql") and not allow_insecure_defaults()
 
 # Durable job queue (Arq + Redis). Unset -> triage/alert delivery fall back to
@@ -59,10 +63,17 @@ def enroll_tokens() -> set[str]:
 ENROLL_TOKEN_TTL_S = int(os.environ.get("PALISADE_ENROLL_TOKEN_TTL_S", str(15 * 60)))
 
 
+# Lifetime of an env-seeded bootstrap enroll token. Re-armed (expires_at pushed
+# forward) on each boot so a restart re-enables enrollment, but a long-running
+# control plane never keeps an indefinitely valid bootstrap token. Default 24h.
+BOOTSTRAP_TOKEN_TTL_S = int(os.environ.get("PALISADE_BOOTSTRAP_TOKEN_TTL_S", str(24 * 3600)))
+
+
 # --- multi-tenancy (M1) ---
 # Bootstrap seeds this user into the demo org so the demo logs in with one click.
 DEMO_USER_EMAIL = os.environ.get("PALISADE_DEMO_USER_EMAIL", "demo@palisade.local")
-DEMO_USER_PASSWORD = os.environ.get("PALISADE_DEMO_USER_PASSWORD", "palisade")
+DEMO_USER_PASSWORD_DEFAULT = "palisade"
+DEMO_USER_PASSWORD = os.environ.get("PALISADE_DEMO_USER_PASSWORD", DEMO_USER_PASSWORD_DEFAULT)
 # Session lifetime for the web UI bearer token (default 7 days).
 SESSION_TTL_S = int(os.environ.get("PALISADE_SESSION_TTL_S", str(7 * 24 * 3600)))
 

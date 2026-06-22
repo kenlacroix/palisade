@@ -1,0 +1,150 @@
+#!/bin/sh
+# Palisade agent installer. Served at https://trypalisade.dev/install:
+#
+#   curl -fsSL https://trypalisade.dev/install | sh
+#
+# Detects OS/arch and puts the `palisade` binary on PATH, preferring a prebuilt
+# release asset and falling back to a source build (needs Go 1.22+) when no
+# binary is published for this platform. Then enroll:
+#
+#   PALISADE_ENROLL_TOKEN=<token> palisade enroll --server https://api.trypalisade.dev
+set -eu
+
+REPO="kenlacroix/palisade"
+BIN="palisade"
+VERSION="${PALISADE_VERSION:-latest}"
+
+# Pinned minisign public key for release SHA256SUMS. When set, the installer
+# verifies the signature on SHA256SUMS before trusting any checksum. Leave empty
+# until a signing key is provisioned (see docs/release-signing.md); empty means
+# checksum-only verification. Override for testing with PALISADE_MINISIGN_PUBKEY.
+MINISIGN_PUBKEY="${PALISADE_MINISIGN_PUBKEY:-}"
+
+log() { printf '[palisade] %s\n' "$1" >&2; }
+die() { printf '[palisade] error: %s\n' "$1" >&2; exit 1; }
+
+# --- detect platform ---
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
+case "$os" in
+  linux | darwin) ;;
+  *) die "unsupported OS: $os (Linux and macOS only)" ;;
+esac
+arch=$(uname -m)
+case "$arch" in
+  x86_64 | amd64) arch="amd64" ;;
+  aarch64 | arm64) arch="arm64" ;;
+  *) die "unsupported architecture: $arch" ;;
+esac
+asset="${BIN}-${os}-${arch}"
+
+# --- pick an install dir already on PATH ---
+if [ -d /usr/local/bin ] && [ -w /usr/local/bin ]; then
+  dest="/usr/local/bin"; sudo=""
+elif command -v sudo >/dev/null 2>&1; then
+  dest="/usr/local/bin"; sudo="sudo"
+else
+  dest="${HOME}/.local/bin"; sudo=""
+  mkdir -p "$dest"
+fi
+
+install_binary() { # <src-file>
+  chmod +x "$1"
+  $sudo mv "$1" "${dest}/${BIN}"
+  log "installed ${BIN} to ${dest}/${BIN}"
+  case ":${PATH}:" in
+    *:"${dest}":*) ;;
+    *) log "note: ${dest} is not on your PATH; add it or run ${dest}/${BIN} directly" ;;
+  esac
+}
+
+sha256_of() { # <file> -> prints hex digest
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    die "no sha256 tool found (need sha256sum or shasum) to verify the download"
+  fi
+}
+
+verify_signature() { # <sums-file> <binary-file>  — authenticate SHA256SUMS itself
+  if [ -z "$MINISIGN_PUBKEY" ]; then
+    [ -z "${PALISADE_REQUIRE_SIGNATURE:-}" ] ||
+      { rm -f "$1" "$2"; die "PALISADE_REQUIRE_SIGNATURE set but no pinned minisign key in installer"; }
+    return 0
+  fi
+  if ! command -v minisign >/dev/null 2>&1; then
+    [ -z "${PALISADE_REQUIRE_SIGNATURE:-}" ] ||
+      { rm -f "$1" "$2"; die "minisign not installed but PALISADE_REQUIRE_SIGNATURE is set"; }
+    log "warning: minisign not installed; skipping signature check (verify manually: minisign -Vm SHA256SUMS -P ${MINISIGN_PUBKEY})"
+    return 0
+  fi
+  sig=$(mktemp)
+  if ! curl -fsSL "$sums_sig_url" -o "$sig" 2>/dev/null; then
+    rm -f "$sig"
+    [ -z "${PALISADE_REQUIRE_SIGNATURE:-}" ] ||
+      { rm -f "$1" "$2"; die "no SHA256SUMS.minisig for this release but PALISADE_REQUIRE_SIGNATURE is set"; }
+    log "warning: no SHA256SUMS.minisig published for this release; proceeding on checksum only"
+    return 0
+  fi
+  if minisign -Vm "$1" -x "$sig" -P "$MINISIGN_PUBKEY" >/dev/null 2>&1; then
+    rm -f "$sig"
+    log "verified SHA256SUMS signature (minisign)"
+  else
+    rm -f "$sig" "$1" "$2"
+    die "SHA256SUMS signature verification FAILED against pinned key"
+  fi
+}
+
+verify_checksum() { # <file> <asset-name>
+  sums=$(mktemp)
+  curl -fsSL "$sums_url" -o "$sums" 2>/dev/null ||
+    { rm -f "$sums" "$1"; die "could not download SHA256SUMS to verify ${2}"; }
+  verify_signature "$sums" "$1"
+  want=$(awk -v a="$2" '$2 == a || $2 == "*" a {print $1}' "$sums" | head -n1)
+  rm -f "$sums"
+  [ -n "$want" ] || { rm -f "$1"; die "no checksum for ${2} in SHA256SUMS"; }
+  got=$(sha256_of "$1")
+  if [ "$want" != "$got" ]; then
+    rm -f "$1"
+    die "checksum mismatch for ${2}: expected ${want}, got ${got}"
+  fi
+  log "verified ${2} (sha256 ${got})"
+}
+
+build_from_source() {
+  command -v go >/dev/null 2>&1 || die "Go 1.22+ required to build from source: https://go.dev/dl/"
+  command -v git >/dev/null 2>&1 || die "git required to build from source"
+  src=$(mktemp -d)
+  trap 'rm -rf "$src"' EXIT
+  log "cloning ${REPO}"
+  git clone --depth 1 "https://github.com/${REPO}.git" "$src" >/dev/null 2>&1 || die "clone failed"
+  log "building from source (go build)"
+  out="${src}/${BIN}"
+  ( cd "${src}/agent" && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$out" ./cmd/palisade ) ||
+    die "build failed"
+  install_binary "$out"
+}
+
+# --- install: prefer a prebuilt release, fall back to source ---
+if [ "$VERSION" = "latest" ]; then
+  base="https://github.com/${REPO}/releases/latest/download"
+else
+  base="https://github.com/${REPO}/releases/download/${VERSION}"
+fi
+url="${base}/${asset}"
+sums_url="${base}/SHA256SUMS"
+sums_sig_url="${base}/SHA256SUMS.minisig"
+
+tmp=$(mktemp)
+if curl -fsSL "$url" -o "$tmp" 2>/dev/null; then
+  log "downloaded ${asset} (${VERSION})"
+  verify_checksum "$tmp" "$asset"
+  install_binary "$tmp"
+else
+  rm -f "$tmp"
+  log "no prebuilt ${asset} for release '${VERSION}'; building from source"
+  build_from_source
+fi
+
+log "done. Next: PALISADE_ENROLL_TOKEN=<token> ${BIN} enroll --server https://api.trypalisade.dev"
