@@ -231,8 +231,9 @@ cd control-plane && ./.venv/bin/python -m app.smoke_test        # full loop (uns
 cd agent && go test ./...                                       # agent unit tests incl. manifest verify
 ```
 
-`pytest` is optional; both Python test modules run as plain scripts via
-`python -m`.
+The control plane has a suite of `app/*_test.py` modules; CI runs each in its
+own process with `pytest` (several rebind module-global state at import). Most
+also run as plain scripts via `python -m`. Run `make lint` before committing.
 
 ## Configuration
 
