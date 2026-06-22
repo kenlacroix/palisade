@@ -36,8 +36,14 @@ GOOS=linux GOARCH=arm64 go build -o palisade-arm64 ./cmd/palisade
 ### 1. Enroll (once)
 
 ```sh
-palisade enroll --token PLS-7F3A-9C21-LK48 --server https://api.trypalisade.dev
+PALISADE_ENROLL_TOKEN=PLS-7F3A-9C21-LK48 palisade enroll --server https://api.trypalisade.dev
+# or pipe the token in (e.g. from a secret store) without an env var:
+printf %s "$TOKEN" | palisade enroll --token-stdin --server https://api.trypalisade.dev
 ```
+
+The token is resolved in order: `--token-stdin`, then `PALISADE_ENROLL_TOKEN`,
+then the bare `--token` flag. Passing `--token <t>` still works but is
+**discouraged** — it is visible in the process list (`ps`).
 
 This calls `POST /v1/agents/enroll` and stores `{agent_id, agent_secret, server}`
 plus the issued mTLS client cert (`client_cert_pem`, `client_key_pem`,
@@ -48,7 +54,7 @@ one agent, binds it to the token's org, and is then marked used (re-enrolling
 with the same token returns 401). Override the directory with `PALISADE_HOME`:
 
 ```sh
-PALISADE_HOME=/etc/palisade palisade enroll --token ... --server ...
+PALISADE_HOME=/etc/palisade PALISADE_ENROLL_TOKEN=... palisade enroll --server ...
 ```
 
 ### 2. Run the loop

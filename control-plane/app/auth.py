@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hmac
+
 from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -28,7 +30,7 @@ def require_agent(
         agent = db.execute(
             select(Agent).where(Agent.cert_fingerprint == fingerprint)
         ).scalar_one_or_none()
-        if agent is None:
+        if agent is None or not hmac.compare_digest(agent.cert_fingerprint, fingerprint):
             raise HTTPException(status_code=401, detail="invalid client certificate")
         _set_rls_org(db, agent.org_id)
         return agent
@@ -41,7 +43,7 @@ def require_agent(
         raise HTTPException(status_code=401, detail="missing bearer token")
     secret = authorization.split(" ", 1)[1].strip()
     agent = db.execute(select(Agent).where(Agent.secret == secret)).scalar_one_or_none()
-    if agent is None:
+    if agent is None or not hmac.compare_digest(agent.secret, secret):
         raise HTTPException(status_code=401, detail="invalid agent secret")
     # Scope Postgres RLS to the agent's org for the rest of this request.
     _set_rls_org(db, agent.org_id)

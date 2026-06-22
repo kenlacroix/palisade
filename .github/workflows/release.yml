@@ -31,6 +31,29 @@ jobs:
               go build -trimpath -ldflags "-s -w" \
               -o "../dist/palisade-$os-$arch" ./cmd/palisade
           done
+      - name: Checksum binaries
+        working-directory: dist
+        run: |
+          sha256sum palisade-* > SHA256SUMS
+          cat SHA256SUMS
+      - name: Sign checksums (minisign)
+        working-directory: dist
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          if [ -z "${MINISIGN_SECRET_KEY:-}" ]; then
+            echo "::warning::MINISIGN_SECRET_KEY secret not set; publishing SHA256SUMS unsigned"
+            exit 0
+          fi
+          sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+          umask 077
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > minisign.key
+          # Key is generated passwordless (minisign -G -W); GitHub's secret store
+          # is the protection. Feed an empty password on stdin and sign.
+          printf '\n' | minisign -S -s minisign.key -m SHA256SUMS \
+            -t "palisade ${{ github.ref_name }} checksums"
+          rm -f minisign.key
+          cat SHA256SUMS.minisig
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

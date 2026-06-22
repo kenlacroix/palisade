@@ -7,11 +7,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -58,8 +60,9 @@ func usage() {
 	fmt.Fprint(os.Stderr, `palisade — attack-surface monitoring agent
 
 Usage:
-  palisade enroll --token <t> --server <url>   Enroll this host (writes config)
-  palisade run [--server <url>]                Run the heartbeat/scan loop
+  PALISADE_ENROLL_TOKEN=<t> palisade enroll --server <url>   Enroll this host (writes config)
+                                                            (or pipe the token with --token-stdin)
+  palisade run [--server <url>]                              Run the heartbeat/scan loop
 
 Config is stored in $PALISADE_HOME/config.json (default ./.palisade).
 `)
@@ -67,13 +70,18 @@ Config is stored in $PALISADE_HOME/config.json (default ./.palisade).
 
 func cmdEnroll(args []string) error {
 	fs := flag.NewFlagSet("enroll", flag.ExitOnError)
-	token := fs.String("token", "", "one-time enrollment token (required)")
+	token := fs.String("token", "", "enrollment token (insecure: visible in the process table; prefer PALISADE_ENROLL_TOKEN or --token-stdin)")
+	tokenStdin := fs.Bool("token-stdin", false, "read the enrollment token from stdin")
 	server := fs.String("server", "", "control plane base URL (required)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *token == "" || *server == "" {
-		return fmt.Errorf("both --token and --server are required")
+	tok, err := resolveEnrollToken(*token, *tokenStdin)
+	if err != nil {
+		return err
+	}
+	if tok == "" || *server == "" {
+		return fmt.Errorf("an enrollment token (PALISADE_ENROLL_TOKEN env, --token-stdin, or --token) and --server are required")
 	}
 
 	hostname, _ := os.Hostname()
@@ -83,7 +91,7 @@ func cmdEnroll(args []string) error {
 	defer cancel()
 
 	resp, err := c.Enroll(ctx, catalog.EnrollRequest{
-		EnrollToken: *token,
+		EnrollToken: tok,
 		Host: catalog.HostInfo{
 			Hostname:     hostname,
 			OS:           runtime.GOOS,
@@ -108,6 +116,23 @@ func cmdEnroll(args []string) error {
 
 	log.Printf("enrolled as agent %s (heartbeat every %ds)", resp.AgentID, resp.HeartbeatIntervalS)
 	return nil
+}
+
+// resolveEnrollToken sources the one-time enroll token without putting it on the
+// command line, where it would leak via the process table. Order: --token-stdin,
+// then PALISADE_ENROLL_TOKEN, then the discouraged --token flag.
+func resolveEnrollToken(flagToken string, fromStdin bool) (string, error) {
+	if fromStdin {
+		b, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("read token from stdin: %w", err)
+		}
+		return strings.TrimSpace(string(b)), nil
+	}
+	if env := os.Getenv("PALISADE_ENROLL_TOKEN"); env != "" {
+		return env, nil
+	}
+	return flagToken, nil
 }
 
 func cmdRun(args []string) error {
