@@ -93,6 +93,7 @@ export default function Assets({ role }: { role: Role }) {
             {rows.map((a) => (
               <tr key={a.id} className="hover:bg-ink-700/50">
                 <td className="px-4 py-3 font-mono text-slate-200">
+                  {a.scheme ? `${a.scheme}://` : ""}
                   {a.host}:{a.port}
                 </td>
                 <td className="px-4 py-3 text-slate-300">{a.service}</td>

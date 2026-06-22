@@ -56,6 +56,7 @@ export interface ApiAsset {
   product: string | null;
   version: string | null;
   exposure: Exposure;
+  scheme?: "http" | "https" | null;
   findings_critical: number;
   findings_high: number;
   findings_open: number;

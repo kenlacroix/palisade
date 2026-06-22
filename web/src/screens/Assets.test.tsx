@@ -64,6 +64,20 @@ describe("Assets", () => {
     expect(screen.getByText("✓ clean")).toBeInTheDocument();
   });
 
+  it("renders the scheme prefix for an https asset and omits it when absent", async () => {
+    mockFetchAssets.mockResolvedValue({
+      assets: [
+        asset({ id: "s1", host: "10.0.0.7", port: 443, scheme: "https" }),
+        asset({ id: "s2", host: "10.0.0.8", port: 80, scheme: null }),
+      ],
+    });
+
+    render(<Assets role="admin" />);
+
+    expect(await screen.findByText("https://10.0.0.7:443")).toBeInTheDocument();
+    expect(screen.getByText("10.0.0.8:80")).toBeInTheDocument();
+  });
+
   it("shows critical and high finding counts", async () => {
     mockFetchAssets.mockResolvedValue({ assets: [asset()] });
 

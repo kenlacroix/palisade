@@ -56,6 +56,7 @@ class AssetIn(BaseModel):
     product: str | None = None
     version: str | None = None
     exposure: Exposure
+    scheme: Literal["http", "https"] | None = None
 
 
 class AssetsRequest(BaseModel):
@@ -185,6 +186,7 @@ class AssetRow(BaseModel):
     product: str | None
     version: str | None
     exposure: str
+    scheme: str | None = None
     findings_critical: int
     findings_high: int
     findings_open: int
