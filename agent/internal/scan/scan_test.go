@@ -43,21 +43,25 @@ func TestEvalDSLDuration(t *testing.T) {
 
 func TestSchemeFor(t *testing.T) {
 	cases := []struct {
-		name      string
-		detScheme string
-		authority string
-		want      string
+		name        string
+		detScheme   string
+		assetScheme string
+		authority   string
+		want        string
 	}{
-		{"explicit https wins over http port", "https", "host:80", "https://host:80"},
-		{"explicit http wins over tls port", "http", "host:443", "http://host:443"},
-		{"port 443 implies https", "", "host:443", "https://host:443"},
-		{"port 8443 implies https", "", "host:8443", "https://host:8443"},
-		{"default http", "", "host:8080", "http://host:8080"},
-		{"no port defaults http", "", "host", "http://host"},
+		{"explicit https wins over http port", "https", "", "host:80", "https://host:80"},
+		{"explicit http wins over tls port", "http", "", "host:443", "http://host:443"},
+		{"detection scheme wins over asset scheme", "https", "http", "host:80", "https://host:80"},
+		{"asset scheme used when no detection scheme", "", "https", "host:80", "https://host:80"},
+		{"asset http wins over tls port heuristic", "", "http", "host:443", "http://host:443"},
+		{"port 443 implies https", "", "", "host:443", "https://host:443"},
+		{"port 8443 implies https", "", "", "host:8443", "https://host:8443"},
+		{"default http", "", "", "host:8080", "http://host:8080"},
+		{"no port defaults http", "", "", "host", "http://host"},
 	}
 	for _, c := range cases {
-		if got := schemeFor(c.detScheme, c.authority); got != c.want {
-			t.Errorf("%s: schemeFor(%q, %q) = %q, want %q", c.name, c.detScheme, c.authority, got, c.want)
+		if got := schemeFor(c.detScheme, c.assetScheme, c.authority); got != c.want {
+			t.Errorf("%s: schemeFor(%q, %q, %q) = %q, want %q", c.name, c.detScheme, c.assetScheme, c.authority, got, c.want)
 		}
 	}
 }

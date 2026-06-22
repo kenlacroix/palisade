@@ -89,6 +89,7 @@ def list_assets(
                 product=a.product,
                 version=a.version,
                 exposure=a.exposure,
+                scheme=a.scheme,
                 findings_critical=crit,
                 findings_high=high,
                 findings_open=open_count,

@@ -80,7 +80,8 @@ type Asset struct {
 	Service  string  `json:"service"`
 	Product  *string `json:"product"`
 	Version  *string `json:"version"`
-	Exposure string  `json:"exposure"` // "internal" | "external"
+	Exposure string  `json:"exposure"`         // "internal" | "external"
+	Scheme   string  `json:"scheme,omitempty"` // "http" | "https" | "" (unknown)
 }
 
 // AssetsRequest is POST /v1/agents/{id}/assets.

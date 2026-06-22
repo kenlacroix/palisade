@@ -179,6 +179,7 @@ def upsert_assets(
             existing.product = a.product
             existing.version = a.version
             existing.exposure = a.exposure
+            existing.scheme = a.scheme
             existing.last_seen = _now()
             existing.agent_id = agent.id
             asset = existing
@@ -193,6 +194,7 @@ def upsert_assets(
                 product=a.product,
                 version=a.version,
                 exposure=a.exposure,
+                scheme=a.scheme,
             )
             db.add(asset)
             db.flush()

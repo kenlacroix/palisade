@@ -77,6 +77,7 @@ class Asset(Base):
     product: Mapped[str | None] = mapped_column(String, nullable=True)
     version: Mapped[str | None] = mapped_column(String, nullable=True)
     exposure: Mapped[str] = mapped_column(String, default="internal")
+    scheme: Mapped[str | None] = mapped_column(String, nullable=True)
     first_seen: Mapped[datetime] = mapped_column(DateTime, default=_now)
     last_seen: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
