@@ -18,7 +18,13 @@ function Sparkline({ data }: { data: number[] }) {
   );
 }
 
-export default function Dashboard({ onOpenFinding }: { onOpenFinding: (id: string) => void }) {
+export default function Dashboard({
+  onOpenFinding,
+  demoMode = false,
+}: {
+  onOpenFinding: (id: string) => void;
+  demoMode?: boolean;
+}) {
   const posture = useApi(fetchPostureSummary, [], { pollMs: 10000 });
   const findings = useApi(fetchFindings, [], { pollMs: 10000 });
 
@@ -37,6 +43,13 @@ export default function Dashboard({ onOpenFinding }: { onOpenFinding: (id: strin
           <span className="text-slate-500">/100</span>
         </div>
       </div>
+
+      {demoMode && (
+        <p className="text-sm text-slate-500">
+          Agents enroll on each host, discover listening services, run CVE detections locally, and
+          report only normalized findings — what you see below is that pipeline's output.
+        </p>
+      )}
 
       <div className="grid grid-cols-4 gap-4">
         {[

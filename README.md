@@ -31,6 +31,40 @@ The web UI is multi-tenant: log in (`demo@palisade.local` / `palisade` in the
 demo), and all `/v1` read endpoints are scoped to your active org with role-based
 access (owner/admin/member/viewer).
 
+## Try it in one command
+
+The fastest way to see the whole product running in your own environment. Brings
+up the control plane, web UI, Postgres, and an agent that auto-enrolls and scans
+a bundled deliberately-vulnerable target — on top of a pre-seeded org so every
+screen (Dashboard, Assets, Findings, Detections, Alerts) is populated the moment
+it loads.
+
+```bash
+make demo                       # docker compose: api + web + postgres + agent + target
+# open http://localhost:8080 — log in as demo@palisade.local / palisade
+make demo-down                  # tear down (removes volumes for a clean re-run)
+```
+
+Within ~20–40s the agent enrolls, discovers the target, and a real critical
+finding (`litellm-proxy-preauth-sqli`, CVE-2026-42208) appears alongside the
+seeded data — the full **enroll → discover → scan → finding → posture** loop,
+end to end, no manual steps.
+
+Two flags drive the demo (set automatically by `make demo`):
+
+| Var | Effect |
+|-----|--------|
+| `PALISADE_SEED_DEMO=1` | Populate the demo org with realistic assets, findings, 30-day posture trend, alerts, and audit history at bootstrap (idempotent). |
+| `PALISADE_DEMO_MODE=1` | Make the public demo **read-only** for logged-in users (agent ingest still writes); surfaces a "live demo" banner in the UI. |
+
+Both default off, so dev and self-hosted production behave exactly as before
+unless you opt in. To populate a local sqlite run without Docker, set
+`PALISADE_SEED_DEMO=1` before starting the control plane.
+
+To monitor your **own** hosts instead of the bundled target: mint an enroll
+token in the UI (**Add agent**), then run the agent binary on each host
+(`palisade enroll --token <T> --server <url>` → `palisade run`).
+
 ## Quickstart (zero infra, sqlite)
 
 Requires Go 1.22+, Python 3.12, Node 18+.

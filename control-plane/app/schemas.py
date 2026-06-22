@@ -324,6 +324,9 @@ class MeResponse(BaseModel):
     org_name: str
     role: Role
     memberships: list[MembershipRow]
+    # True when the deploy runs as a public read-only demo; the web UI shows a
+    # banner and hides/disables mutating actions. Defaults false for non-demo.
+    demo_mode: bool = False
 
 
 class SwitchOrgRequest(BaseModel):

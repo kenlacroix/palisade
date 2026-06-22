@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import audit
+from .. import audit, config
 from ..db import get_db
 from ..models import Membership, Org, User, UserSession
 from ..schemas import (
@@ -97,6 +97,7 @@ def me(
         org_name=org.name if org else "",
         role=role,
         memberships=memberships,
+        demo_mode=config.demo_mode(),
     )
 
 
@@ -117,4 +118,5 @@ def switch_org(
         org_name=org.name if org else "",
         role=role,
         memberships=_memberships(db, user.id),
+        demo_mode=config.demo_mode(),
     )

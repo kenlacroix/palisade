@@ -14,15 +14,16 @@ import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from . import config
 from .db import get_db
-from .models import ROLES, Membership, Org, User, UserSession
+from .models import DEMO_ORG_ID, ROLES, Membership, Org, User, UserSession
 
 _PBKDF2_ITERATIONS = 240_000
+_MUTATING_METHODS = ("POST", "PATCH", "PUT", "DELETE")
 
 
 # --- password hashing (stdlib pbkdf2, no extra deps) ---
@@ -98,7 +99,11 @@ def _set_rls_org(db: Session, org_id: str) -> None:
         db.execute(text("SELECT set_config('app.current_org_id', :org, true)"), {"org": org_id})
 
 
-def current_org(sess: UserSession = Depends(current_session), db: Session = Depends(get_db)) -> Org:
+def current_org(
+    request: Request,
+    sess: UserSession = Depends(current_session),
+    db: Session = Depends(get_db),
+) -> Org:
     org = db.get(Org, sess.org_id)
     if org is None:
         raise HTTPException(status_code=401, detail="org not found")
@@ -109,6 +114,16 @@ def current_org(sess: UserSession = Depends(current_session), db: Session = Depe
     ).scalar_one_or_none()
     if membership is None:
         raise HTTPException(status_code=403, detail="no membership for active org")
+    # Public read-only demo: reject user-session mutations on the demo org. Every
+    # user-session mutating endpoint depends on current_org, while agent
+    # endpoints authenticate via require_agent and never reach here — so the live
+    # demo loop (enroll/heartbeat/assets/findings) keeps writing.
+    if (
+        config.demo_mode()
+        and org.id == DEMO_ORG_ID
+        and request.method in _MUTATING_METHODS
+    ):
+        raise HTTPException(status_code=403, detail="demo is read-only")
     _set_rls_org(db, org.id)
     return org
 
