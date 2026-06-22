@@ -132,7 +132,9 @@ class Finding(Base):
     scan_id: Mapped[str | None] = mapped_column(String, nullable=True)
     severity: Mapped[str] = mapped_column(String, default="info")
     status: Mapped[str] = mapped_column(String, default="open")  # open|resolved|muted|regressed
-    fingerprint: Mapped[str] = mapped_column(String, index=True)
+    # Indexed via the composite unique in __table_args__; no standalone index
+    # (nothing queries fingerprint without org_id — see migration 0011).
+    fingerprint: Mapped[str] = mapped_column(String)
     evidence: Mapped[dict] = mapped_column(JSON, default=dict)
     # Evidence sealed at rest (AES-256-GCM, nonce||ciphertext) under the org's
     # data key. Populated only when a KEK is configured; then `evidence` is empty

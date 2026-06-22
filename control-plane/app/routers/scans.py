@@ -11,7 +11,7 @@ from ..ingest import Report, ingest_reports
 from ..models import Agent, Asset, Finding, Org, Scan
 from ..schemas import ExternalScanResponse, FindingsRequest
 from ..tasks import scan_external_assets, triage_findings
-from ..tenancy import current_org, require_role
+from ..tenancy import _set_rls_org, current_org, require_role
 
 router = APIRouter(prefix="/v1/scans", tags=["scans"])
 
@@ -74,6 +74,10 @@ def ingest_findings(
     ]
     new_finding_ids, alert_events = ingest_reports(db, agent.org_id, scan_id, reports)
     db.commit()
+    # commit() ended the transaction, dropping the SET LOCAL ROLE + org GUC set
+    # by require_agent. Re-scope before the post-commit alert writes below, which
+    # INSERT into the RLS-protected alert table.
+    _set_rls_org(db, agent.org_id)
 
     # Offload AI triage so it never blocks the request. No-op without a key.
     if config.ANTHROPIC_API_KEY and new_finding_ids:

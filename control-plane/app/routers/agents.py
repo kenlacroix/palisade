@@ -138,6 +138,10 @@ def enroll(req: EnrollRequest, db: Session = Depends(get_db)) -> EnrollResponse:
     # Issue an mTLS client cert bound to this agent. Bearer agent_secret is still
     # returned as the dev/plaintext fallback.
     cert = mtls.issue_client_cert(db, agent.id, agent.org_id)
+    # The commit above (and any inside ensure_ca on first boot) dropped the SET
+    # LOCAL ROLE + org GUC, so re-scope before updating the RLS-protected agent
+    # row with its cert fingerprint.
+    _set_rls_org(db, agent.org_id)
     agent.cert_fingerprint = cert["fingerprint"]
     agent.cert_not_after = cert["not_after"]
     db.commit()

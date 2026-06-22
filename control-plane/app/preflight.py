@@ -58,6 +58,11 @@ def enforce() -> None:
     if not issues:
         return
     if config.is_production():
+        # Log each issue at ERROR first so the actionable text lands in
+        # aggregated logs even if the RuntimeError traceback is truncated or
+        # the process is in a tight restart loop.
+        for issue in issues:
+            log.error("startup blocked (insecure default): %s", issue)
         bullets = "\n  - ".join(issues)
         raise RuntimeError(
             "Palisade refused to start: insecure default configuration detected.\n  - "

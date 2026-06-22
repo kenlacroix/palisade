@@ -71,6 +71,23 @@ Set these before exposing an instance (see `control-plane/.env.example`):
 7. **`PALISADE_PERIMETER_SCOPE_ALLOWLIST`** — confirm in-scope hosts before any
    control-plane probe leaves the box.
 
+## Operational notes
+
+- **The evidence KEK is effectively non-rotatable for the CA key.** `PALISADE_EVIDENCE_KEK`
+  seals the internal CA private key (`enc:v1:`), and `encryption.open_secret` does
+  not fall back on a decrypt failure (unlike evidence reads). Rotating or removing
+  the KEK without first re-wrapping `cert_authority.key_pem` will hard-fail agent
+  enrollment (`mtls.issue_client_cert` raises). To rotate: re-seal the CA key under
+  the new KEK in the same step, or accept that the CA must be re-issued.
+- **The web origin must be a `trypalisade.dev` subdomain.** The session cookie is
+  host-only, `Secure`, `SameSite=Lax`. With the web app at `app.trypalisade.dev` /
+  `trypalisade.dev` and the API at `api.trypalisade.dev`, requests are same-site and
+  the cookie flows. If the web app is ever served from a raw `*.pages.dev` preview
+  origin, it becomes cross-site and `SameSite=Lax` drops the cookie on XHR — login
+  works in-tab but silently fails to rehydrate on reload. Either keep the web origin
+  on `trypalisade.dev`, or switch the cookie to `SameSite=None; Secure` with a strict
+  CORS allowlist if a cross-site origin must be supported.
+
 ## Residual risks / future work
 
 - **Connect (not just `SET ROLE`) as the non-superuser role.** The app drops to

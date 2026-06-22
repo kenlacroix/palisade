@@ -34,6 +34,13 @@ def _is_public(ip: str) -> bool:
         addr = ipaddress.ip_address(ip)
     except ValueError:
         return False
+    # Normalize IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254 / ::ffff:127.0.0.1)
+    # to the embedded v4 before classifying. .is_loopback/.is_link_local don't
+    # flag the mapped form, and .is_private only normalizes it on Python >=3.12.4,
+    # so collapse it ourselves to stay correct across versions.
+    mapped = getattr(addr, "ipv4_mapped", None)
+    if mapped is not None:
+        addr = mapped
     return not (
         addr.is_private
         or addr.is_loopback

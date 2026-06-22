@@ -91,10 +91,11 @@ $$
 
 
 def upgrade() -> None:
-    # 1) Per-org fingerprint uniqueness: drop the global-unique index, restore a
-    # plain lookup index, add the composite unique.
+    # 1) Per-org fingerprint uniqueness: replace the global-unique index with a
+    # composite unique on (org_id, fingerprint). No standalone fingerprint index
+    # is kept — dedupe filters on (org_id, fingerprint) and nothing queries the
+    # fingerprint alone, so a separate index would be pure write amplification.
     op.drop_index("ix_finding_fingerprint", table_name="finding")
-    op.create_index("ix_finding_fingerprint", "finding", ["fingerprint"], unique=False)
     op.create_index(
         "uq_finding_org_fingerprint", "finding", ["org_id", "fingerprint"], unique=True
     )
@@ -107,9 +108,17 @@ def upgrade() -> None:
         # Carve-out for the cross-tenant catalog metric: a SELECT-only permissive
         # policy that opens `finding` when app.aggregate_bypass is 'on'. Permissive
         # policies OR together, so this widens reads only while the flag is set.
+        # This is DEFENSE-IN-DEPTH: today palisade_detection_tenant_hits is
+        # SECURITY DEFINER owned by the superuser migrator, which bypasses RLS
+        # outright, so the carve-out is dormant. It only does work if that
+        # function is ever reowned by a NON-superuser role — the direction this
+        # codebase pushes deployments. The `current_user <> 'palisade_app'` clause
+        # ensures that even if a request running as the app role somehow set the
+        # GUC, it still could not widen its own reads; only the definer can.
         op.execute(
             "CREATE POLICY finding_aggregate_read ON finding FOR SELECT "
-            "USING (current_setting('app.aggregate_bypass', true) = 'on')"
+            "USING (current_setting('app.aggregate_bypass', true) = 'on' "
+            "AND current_user <> 'palisade_app')"
         )
         # Recreate the metric function to set that flag for its own execution
         # only (function-scoped SET reverts on return — it does not leak to the
@@ -125,5 +134,8 @@ def downgrade() -> None:
             op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
 
     op.drop_index("uq_finding_org_fingerprint", table_name="finding")
-    op.drop_index("ix_finding_fingerprint", table_name="finding")
-    op.create_index("ix_finding_fingerprint", "finding", ["fingerprint"], unique=True)
+    # Restore a fingerprint index, but NON-unique: post-0011 the per-org unique
+    # permits cross-org duplicate fingerprints, so recreating the original
+    # GLOBAL-unique index could fail on existing data. Non-unique downgrades
+    # cleanly; resolve cross-org dupes manually if a global unique is required.
+    op.create_index("ix_finding_fingerprint", "finding", ["fingerprint"], unique=False)
