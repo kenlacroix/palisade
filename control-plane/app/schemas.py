@@ -316,6 +316,9 @@ class SessionInfo(BaseModel):
     org_name: str
     role: Role
     memberships: list[MembershipRow]
+    # Mirrors MeResponse so the demo banner shows immediately after login,
+    # not only after the next /me on reload.
+    demo_mode: bool = False
 
 
 class MeResponse(BaseModel):
@@ -324,6 +327,9 @@ class MeResponse(BaseModel):
     org_name: str
     role: Role
     memberships: list[MembershipRow]
+    # True when the deploy runs as a public read-only demo; the web UI shows a
+    # banner and hides/disables mutating actions. Defaults false for non-demo.
+    demo_mode: bool = False
 
 
 class SwitchOrgRequest(BaseModel):

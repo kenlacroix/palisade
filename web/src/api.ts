@@ -184,6 +184,7 @@ export interface Session {
   org_name: string;
   role: Role;
   memberships: Membership[];
+  demo_mode?: boolean;
 }
 
 export interface LoginResponse extends Session {

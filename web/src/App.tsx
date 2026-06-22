@@ -188,11 +188,12 @@ function Shell({
       </aside>
 
       <main className="flex-1 overflow-y-auto">
+        {session.demo_mode && <DemoBanner />}
         <div className="mx-auto max-w-5xl px-8 py-8">
           {findingId ? (
             <FindingDetail findingId={findingId} onBack={closeFinding} />
           ) : view === "dashboard" ? (
-            <Dashboard onOpenFinding={openFinding} />
+            <Dashboard onOpenFinding={openFinding} demoMode={session.demo_mode ?? false} />
           ) : view === "assets" ? (
             <Assets role={session.role} />
           ) : view === "detections" ? (
@@ -208,6 +209,36 @@ function Shell({
           )}
         </div>
       </main>
+    </div>
+  );
+}
+
+function DemoBanner() {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <div className="flex items-center gap-3 border-b border-accent/30 bg-accent/10 px-8 py-2 text-xs text-slate-300">
+      <span className="rounded bg-accent/20 px-1.5 py-0.5 font-medium uppercase tracking-wide text-accent">
+        Live demo
+      </span>
+      <span>
+        Sample data, read-only. This is a portfolio demonstration of Palisade.{" "}
+        <a
+          href="https://trypalisade.dev"
+          target="_blank"
+          rel="noreferrer"
+          className="text-accent hover:underline"
+        >
+          How it works ›
+        </a>
+      </span>
+      <button
+        onClick={() => setDismissed(true)}
+        className="ml-auto text-slate-500 hover:text-slate-300"
+        aria-label="Dismiss demo banner"
+      >
+        ✕
+      </button>
     </div>
   );
 }

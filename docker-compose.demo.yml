@@ -1,0 +1,113 @@
+# Palisade self-contained demo: `make demo` (or `docker compose -f
+# docker-compose.demo.yml up --build`) brings up the WHOLE stack and runs the
+# real agent -> discover -> scan -> finding loop against a bundled vulnerable
+# target, on top of pre-seeded demo data. Open http://localhost:8080.
+#
+# Networking note (why discovery works): the agent discovers services by
+# parsing its OWN /proc/net/tcp. The fake-vulnerable LiteLLM target therefore
+# runs as a background process INSIDE the agent container (see
+# agent/docker-entrypoint.sh), sharing the agent's network namespace. Discover
+# sees the 0.0.0.0:4000 LISTEN socket (service=litellm, exposure=external) and
+# the scan reaches it at <hostname>:4000 in the same netns -> a real finding.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: palisade
+      POSTGRES_PASSWORD: palisade
+      POSTGRES_DB: palisade
+    volumes:
+      - palisade_demo_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U palisade"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot schema migration; runs to completion before the api boots.
+  migrate:
+    build:
+      context: .
+      dockerfile: control-plane/Dockerfile
+    command: ["python", "-m", "app.migrate"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://palisade:palisade@postgres:5432/palisade
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: control-plane/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://palisade:palisade@postgres:5432/palisade
+      REDIS_URL: redis://redis:6379
+      PALISADE_AUTO_MIGRATE: "0"
+      # Demo wiring (env contract implemented by the control plane):
+      PALISADE_SEED_DEMO: "1"          # pre-populate the demo org with sample data
+      PALISADE_ENROLL_TOKENS: "PLS-DEMO" # single-use enroll token for the agent
+      PALISADE_DEMO_MODE: "1"          # user mutations read-only; agent ingest still works
+      # Sign the catalog bundle with the demo key so the agent verifies it
+      # against its pinned demo pubkey (matches DEMO.md step 8).
+      PALISADE_SIGNING_KEY: "70kJtI1NajTd1yQXFHVRuBVQfc6P2CAtRroaLCmYYbY="
+      PALISADE_CORS_ORIGINS: "http://localhost:8080,http://127.0.0.1:8080"
+      PALISADE_DEMO_USER_EMAIL: "demo@palisade.local"
+      PALISADE_DEMO_USER_PASSWORD: "palisade"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "python -c \"import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3); \" || exit 1"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+  # Agent + bundled vulnerable target (same container/netns). Enrolls once
+  # against the control plane, then runs the live discover/scan/finding loop.
+  agent:
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    environment:
+      PALISADE_SERVER: "http://api:8000"
+      PALISADE_ENROLL_TOKEN: "PLS-DEMO"
+      # Tighten the heartbeat cadence so a finding appears quickly in the demo
+      # (the first scan job is issued on the second heartbeat).
+      PALISADE_HEARTBEAT_INTERVAL_S: "10"
+    volumes:
+      - palisade_demo_agent:/var/lib/palisade
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  palisade_demo_pg:
+  palisade_demo_agent:

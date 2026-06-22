@@ -5,7 +5,7 @@ ALEMBIC := cd $(CP) && .venv/bin/alembic
 
 .DEFAULT_GOAL := help
 
-.PHONY: help venv up down logs migrate revision check smoke integration test agent-build web
+.PHONY: help venv up down logs migrate revision check smoke integration test agent-build web demo demo-down
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -49,3 +49,9 @@ agent-build: ## Build the Go agent binary (agent/palisade)
 
 web: ## Run the web prototype dev server
 	cd web && npm run dev
+
+demo: ## Self-contained demo: full stack + live agent loop (open http://localhost:8080)
+	docker compose -f docker-compose.demo.yml up --build
+
+demo-down: ## Stop the demo stack and remove its volumes
+	docker compose -f docker-compose.demo.yml down -v

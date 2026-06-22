@@ -54,6 +54,13 @@ def _bootstrap() -> None:
         mtls.ensure_ca(db)
 
         seed_detections(db)
+
+        # Populate the demo org with a believable dataset so a fresh deploy looks
+        # live. Idempotent; references the just-seeded detection catalog.
+        if config.seed_demo():
+            from .seed import seed_demo
+
+            seed_demo(db)
     finally:
         db.close()
 

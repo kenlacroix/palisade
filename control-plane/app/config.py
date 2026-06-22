@@ -51,6 +51,20 @@ DEMO_USER_PASSWORD = os.environ.get("PALISADE_DEMO_USER_PASSWORD", "palisade")
 SESSION_TTL_S = int(os.environ.get("PALISADE_SESSION_TTL_S", str(7 * 24 * 3600)))
 
 
+# --- demo experience (M-demo) ---
+# Seed a believable, populated dataset into the demo org at bootstrap so a fresh
+# deploy looks like a live product. Idempotent; safe to leave on across reboots.
+def seed_demo() -> bool:
+    return os.environ.get("PALISADE_SEED_DEMO", "").lower() in ("1", "true", "yes")
+
+
+# Public read-only demo: user-session mutations scoped to the demo org are
+# rejected with 403. Agent endpoints (enroll/heartbeat/assets/findings) are
+# unaffected so the live demo loop keeps writing findings.
+def demo_mode() -> bool:
+    return os.environ.get("PALISADE_DEMO_MODE", "").lower() in ("1", "true", "yes")
+
+
 # --- agent mTLS (production hardening) ---
 # When true, agent endpoints REQUIRE a verified client cert and the bearer-secret
 # fallback is rejected. Default false so the plaintext demo/dev still works.
