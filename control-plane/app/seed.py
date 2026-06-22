@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from . import encryption
@@ -206,6 +206,11 @@ def seed_demo(db: Session) -> None:
     # Reconstruct each day's score the same way snapshots._day_score does: a
     # finding is active on day D if first_seen<=D and (currently active OR
     # last_seen>=D). Today's tail equals the live posture summary.
+    # Posture scoring may have already written a snapshot for the demo org (e.g.
+    # today's) before seeding ran; clear any such rows so the reconstruction
+    # below inserts cleanly under the unique(org_id, day) constraint.
+    db.execute(delete(PostureSnapshot).where(PostureSnapshot.org_id == DEMO_ORG_ID))
+    db.flush()
     today = now.date()
     for i in range(30):
         d = today - timedelta(days=29 - i)
