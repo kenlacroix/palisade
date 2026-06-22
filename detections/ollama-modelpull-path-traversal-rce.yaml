@@ -1,8 +1,8 @@
 id: ollama-modelpull-path-traversal-rce
 title: Ollama model-pull path traversal to RCE (Probllama)
 cve: CVE-2024-37032
-cvss: 9.1
-severity: critical
+cvss: 8.8
+severity: high
 category: ai-infra
 engine: nuclei
 match:
