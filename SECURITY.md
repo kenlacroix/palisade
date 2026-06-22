@@ -16,7 +16,10 @@ them.
 - **Internet → API.** A Cloudflare Tunnel publishes `api.trypalisade.dev →
   api:8000` (`control-plane/deploy/cloudflared/config.yml`). The entire `/v1/*`
   surface — including agent enroll/heartbeat/ingest — is internet-reachable.
-  Postgres and Redis are not tunneled.
+  Postgres and Redis are not tunneled; the home/Proxmox overlay
+  (`docker-compose.override.yml`) additionally unpublishes the API's host port
+  (tunnel-only reach) and pins the data tier to an egress-less `internal`
+  network. See `control-plane/deploy/README.md` → *Blast radius & isolation*.
 - **Web → API.** Session bearer token, now also delivered as an httpOnly cookie
   (see below).
 - **Agent → API.** mTLS client cert (preferred) or a bearer `agent_secret`.

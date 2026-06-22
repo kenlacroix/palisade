@@ -3,7 +3,39 @@
 Run the control plane on a home box and publish it at `api.trypalisade.dev`
 through a **Cloudflare Tunnel** — no port forwarding, no exposed home IP, works
 behind CGNAT. `docker-compose.override.yml` (one level up) adds the `cloudflared`
-and `backup` services on top of the base stack.
+and `backup` services on top of the base stack, and hardens it (see below).
+
+## Blast radius & isolation
+
+The live demo is intentionally insecure — it boots with
+`PALISADE_ALLOW_INSECURE_DEFAULTS=1` on default credentials and the public
+signing key, on **synthetic, disposable** data (`PALISADE_SEED_DEMO=1`,
+`PALISADE_DEMO_MODE=1` make it read-only for logged-in users). Treat the box as
+compromisable and keep its blast radius small:
+
+- **Dedicated, disposable host.** Run it in its own unprivileged LXC or a small
+  VM (step 1) that holds nothing else. There is no real tenant data to protect;
+  if anything looks off, `docker compose down -v && docker compose up -d --build`
+  re-seeds from scratch.
+- **No inbound, no LAN exposure.** The tunnel is an *outbound* connection to
+  Cloudflare, so the host needs **no inbound ports** — block inbound at the
+  firewall entirely. `docker-compose.override.yml` also unpublishes the API's
+  host port (`ports: !reset []`), so `/v1` is reachable only through the tunnel
+  and from inside the compose network, never from the home LAN.
+- **No egress from the data tier.** Postgres and Redis run on an `internal`
+  Docker network with no route off the box; only `api`, `worker`, and
+  `cloudflared` join the `edge` network that can reach the internet. A
+  compromised database container cannot exfiltrate or call home.
+- **Reduced container privilege.** Every service runs with
+  `no-new-privileges`, dropped Linux capabilities (where the image's entrypoint
+  allows), and pid/memory caps, so a process escape has less to work with.
+- **Don't bridge demo and real.** Never enroll a real host's agent against the
+  demo, and never point a real tenant at `api.trypalisade.dev`. The demo signing
+  key is public — bundles it serves are forgeable by design.
+
+For a real (non-demo) tenant, follow the production hardening checklist in
+[`SECURITY.md`](../../SECURITY.md): unset the insecure-defaults flag, rotate
+every secret, and let the startup preflight enforce it.
 
 ## 1. Proxmox container
 

@@ -1,6 +1,17 @@
 # Home/Proxmox overlay: publishes the control plane at api.trypalisade.dev via a
-# Cloudflare Tunnel (no port-forwarding, no exposed home IP) and runs a nightly
-# Postgres backup. Auto-merged by `docker compose` when run from this directory.
+# Cloudflare Tunnel (no port-forwarding, no exposed home IP), runs a nightly
+# Postgres backup, and HARDENS the blast radius of the exposed box. Auto-merged
+# by `docker compose` when run from this directory. See deploy/README.md →
+# "Blast radius & isolation".
+#
+# Hardening applied here:
+#   - the API host port is unpublished (!reset) — reachable ONLY via the tunnel
+#     and intra-compose, never from the home LAN;
+#   - postgres/redis sit on an `internal` network with no egress, so a
+#     compromised data tier cannot phone home;
+#   - no-new-privileges + dropped Linux capabilities + pid/memory caps on every
+#     service;
+#   - restart: unless-stopped so the box self-heals across reboots.
 #
 # One-time tunnel setup (on the box, see deploy/README.md):
 #   cloudflared tunnel login
@@ -8,10 +19,73 @@
 #   cp ~/.cloudflared/<UUID>.json deploy/cloudflared/palisade.json
 #   cloudflared tunnel route dns palisade api.trypalisade.dev
 services:
+  postgres:
+    restart: unless-stopped
+    # Keep default caps: the entrypoint drops root -> postgres via gosu (SETUID/
+    # SETGID/CHOWN), which cap_drop:ALL would break. no-new-privileges is safe
+    # (gosu drops, never gains, privileges).
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+    mem_limit: 1g
+    pids_limit: 256
+
+  redis:
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+    mem_limit: 512m
+    pids_limit: 128
+
+  migrate:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - backend
+
+  api:
+    restart: unless-stopped
+    # Reachable only through the tunnel; drop the LAN-facing host port publish.
+    ports: !reset []
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - backend   # postgres + redis
+      - edge      # outbound: Anthropic, in-scope perimeter probes; reached by cloudflared
+    mem_limit: 1g
+    pids_limit: 512
+
+  worker:
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - backend
+      - edge      # outbound: alert delivery (webhook/telegram/email), triage, scans
+    mem_limit: 1g
+    pids_limit: 512
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - edge      # reaches api:8000 over the edge network; outbound to CF edge
+    mem_limit: 256m
+    pids_limit: 128
     volumes:
       - ./deploy/cloudflared:/etc/cloudflared:ro
     depends_on:
@@ -23,6 +97,14 @@ services:
     image: postgres:16
     restart: unless-stopped
     entrypoint: ["/bin/sh", "/backup/pg_backup.sh"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - backend
+    mem_limit: 256m
+    pids_limit: 128
     environment:
       PGHOST: postgres
       POSTGRES_USER: ${POSTGRES_USER:-palisade}
@@ -35,3 +117,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+networks:
+  # Data tier: no route off the box. Only services that must reach the internet
+  # (api, worker, cloudflared) also join `edge`.
+  backend:
+    internal: true
+  edge: {}

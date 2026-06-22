@@ -1,0 +1,31 @@
+id: torchserve-management-ssrf-rce
+title: TorchServe management API model-load SSRF to RCE (ShellTorch)
+cve: CVE-2023-43654
+cvss: 9.8
+severity: critical
+category: ai-infra
+engine: nuclei
+match:
+  service: torchserve
+  versions: "<0.8.2"
+# Non-destructive: ShellTorch abuses the management API's remote model URL to
+# fetch a malicious model archive (SSRF -> RCE). We only probe the inference
+# /ping health endpoint to fingerprint the build; no model registration is sent.
+http:
+  - method: GET
+    path: /ping
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: body
+        words: ['Healthy']
+remediation: |
+  Upgrade TorchServe to >=0.8.2 and constrain allowed_urls to a strict allowlist.
+  Bind the management API (default :8081) to localhost and never expose it; keep
+  inference (:8080) behind an authenticating proxy.
+references:
+  - https://nvd.nist.gov/vuln/detail/CVE-2023-43654
+  - https://www.oligo.security/blog/shelltorch-torchserve-rce
+signature: stub
