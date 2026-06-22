@@ -2,22 +2,25 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import require_agent
-from .. import mtls
+from .. import config, mtls
 from ..db import get_db
-from ..models import Agent, Asset, Detection, EnrollToken, Scan
+from ..models import Agent, Asset, Detection, EnrollToken, Org, Scan
+from ..tenancy import current_org, require_role
 from ..version_match import service_matches
 from ..schemas import (
     AssetsRequest,
     AssetsResponse,
     EnrollRequest,
     EnrollResponse,
+    EnrollTokenCreate,
+    EnrollTokenRow,
     HeartbeatRequest,
     HeartbeatResponse,
     Job,
@@ -34,13 +37,52 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _iso(dt: datetime | None) -> str | None:
+    return _ensure_aware(dt).isoformat() if dt is not None else None
+
+
+def _token_row(t: EnrollToken) -> EnrollTokenRow:
+    return EnrollTokenRow(
+        token=t.token,
+        label=t.label,
+        expires_at=_iso(t.expires_at),
+        used_at=_iso(t.used_at),
+        created_at=_iso(t.created_at),
+    )
+
+
+@router.post("/enroll-tokens", response_model=EnrollTokenRow)
+def mint_enroll_token(
+    req: EnrollTokenCreate,
+    org: Org = Depends(current_org),
+    _: str = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> EnrollTokenRow:
+    # Admin-minted, single-use, short-lived (config.ENROLL_TOKEN_TTL_S). The
+    # returned token is the only time it is shown; the agent enrolls within the
+    # window or it is re-minted.
+    token = EnrollToken(
+        token="PLS-" + secrets.token_hex(12).upper(),
+        org_id=org.id,
+        label=req.label,
+        created_at=_now(),
+        expires_at=_now() + timedelta(seconds=config.ENROLL_TOKEN_TTL_S),
+    )
+    db.add(token)
+    db.commit()
+    return _token_row(token)
+
+
 @router.post("/enroll", response_model=EnrollResponse)
 def enroll(req: EnrollRequest, db: Session = Depends(get_db)) -> EnrollResponse:
     # Enroll tokens are single-use: a token mints exactly one agent and joins it
-    # to the token's org. Seeded at bootstrap from PALISADE_ENROLL_TOKENS.
+    # to the token's org. Seeded at bootstrap from PALISADE_ENROLL_TOKENS, or
+    # minted on demand (short-lived) via POST /v1/agents/enroll-tokens.
     token = db.get(EnrollToken, req.enroll_token)
     if token is None or token.used_at is not None:
         raise HTTPException(status_code=401, detail="invalid or used enroll token")
+    if token.expires_at is not None and _ensure_aware(token.expires_at) < _now():
+        raise HTTPException(status_code=401, detail="enroll token expired")
     agent = Agent(
         id=str(uuid.uuid4()),
         org_id=token.org_id,

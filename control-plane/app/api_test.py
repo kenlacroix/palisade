@@ -432,6 +432,69 @@ def test_triage_noop_when_unconfigured():
         _cleanup(db_path)
 
 
+def _enroll_with(client, token):
+    return client.post(
+        "/v1/agents/enroll",
+        json={
+            "enroll_token": token,
+            "host": {"hostname": "nas", "os": "linux", "arch": "amd64", "agent_version": "0.1.0"},
+        },
+    )
+
+
+def test_minted_enroll_token_is_single_use():
+    client, db_path = _make_client()
+    try:
+        with client:
+            r = client.post(
+                "/v1/agents/enroll-tokens", json={"label": "nas"}, headers=_session(client)
+            )
+            assert r.status_code == 200, r.text
+            tok = r.json()["token"]
+            assert tok.startswith("PLS-") and r.json()["expires_at"] is not None
+
+            assert _enroll_with(client, tok).status_code == 200
+            # single-use: the second enroll with the same token is rejected.
+            assert _enroll_with(client, tok).status_code == 401
+    finally:
+        _cleanup(db_path)
+
+
+def test_mint_enroll_token_requires_admin():
+    client, db_path = _make_client()
+    try:
+        with client:
+            r = client.post("/v1/agents/enroll-tokens", json={})
+            assert r.status_code == 401, r.text  # no session
+    finally:
+        _cleanup(db_path)
+
+
+def test_expired_enroll_token_rejected():
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import EnrollToken
+
+    client, db_path = _make_client()
+    try:
+        with client:
+            r = client.post("/v1/agents/enroll-tokens", json={}, headers=_session(client))
+            tok = r.json()["token"]
+            # Backdate the expiry so the window has closed.
+            with db_module.SessionLocal() as db:
+                row = db.get(EnrollToken, tok)
+                row.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+                db.commit()
+
+            r = _enroll_with(client, tok)
+            assert r.status_code == 401, r.text
+            assert "expired" in r.json()["detail"]
+            # The seeded bootstrap token has no expiry and still works.
+            assert _enroll_with(client, "PLS-DEMO").status_code == 200
+    finally:
+        _cleanup(db_path)
+
+
 if __name__ == "__main__":
     test_draft_requires_api_key()
     test_accept_detection_closes_loop()
@@ -441,4 +504,7 @@ if __name__ == "__main__":
     test_rescan_reissues_scan()
     test_mute_finding_wiring()
     test_triage_noop_when_unconfigured()
+    test_minted_enroll_token_is_single_use()
+    test_mint_enroll_token_requires_admin()
+    test_expired_enroll_token_rejected()
     print("API TESTS OK")

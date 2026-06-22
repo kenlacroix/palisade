@@ -124,6 +124,17 @@ export const muteFinding = (id: string, reason: string, ttl_s = 3600) =>
 
 export const triggerRescan = () => post<{ agents_nudged: number }>("/v1/rescan");
 
+export interface EnrollToken {
+  token: string;
+  label: string;
+  expires_at: string | null;
+  used_at: string | null;
+  created_at: string | null;
+}
+
+export const mintEnrollToken = (label = "") =>
+  post<EnrollToken>("/v1/agents/enroll-tokens", { label });
+
 export const triggerExternalScan = () =>
   post<{ enqueued: boolean; external_assets: number }>("/v1/scans/external");
 

@@ -1,6 +1,16 @@
+import { mintEnrollToken, useApi } from "../api.ts";
 import { Card } from "../ui.tsx";
 
+function expiryNote(expiresAt: string | null): string {
+  if (!expiresAt) return "single use";
+  const mins = Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 60000));
+  return `expires in ${mins} min · single use`;
+}
+
 export default function AddAgent() {
+  const { data, error, loading, refetch } = useApi(() => mintEnrollToken(), []);
+  const token = data?.token;
+
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-semibold tracking-tight">Add an agent</h1>
@@ -12,9 +22,24 @@ export default function AddAgent() {
             <pre className="overflow-x-auto rounded-lg bg-ink-900 p-4 font-mono text-xs text-slate-200">
               <span className="text-slate-500">$ </span>curl -fsSL https://palisade.sh/install | sh \{"\n"}
               {"    "}&amp;&amp; palisade enroll --token{" "}
-              <span className="text-accent">PLS-7F3A-9C21-LK48</span>
+              <span className="text-accent">
+                {loading ? "generating…" : error ? "—" : token}
+              </span>
             </pre>
-            <div className="mt-2 text-xs text-slate-500">token expires in 15 min · single use</div>
+            <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
+              {error ? (
+                <span className="text-rose-400">Could not mint a token: {error}</span>
+              ) : (
+                <span>{expiryNote(data?.expires_at ?? null)}</span>
+              )}
+              <button
+                onClick={refetch}
+                disabled={loading}
+                className="rounded-md border border-ink-700 px-2 py-1 text-slate-300 hover:border-ink-500 disabled:opacity-50"
+              >
+                Regenerate
+              </button>
+            </div>
           </li>
           <li className="flex items-center gap-3 text-slate-400">
             <span className="text-slate-300">2. Waiting for first heartbeat…</span>

@@ -38,6 +38,11 @@ def enroll_tokens() -> set[str]:
     return {t.strip() for t in raw.split(",") if t.strip()}
 
 
+# Lifetime of an admin-minted enroll token (default 15 min, matching the
+# onboarding UI). Env-seeded bootstrap tokens never expire (expires_at is null).
+ENROLL_TOKEN_TTL_S = int(os.environ.get("PALISADE_ENROLL_TOKEN_TTL_S", str(15 * 60)))
+
+
 # --- multi-tenancy (M1) ---
 # Bootstrap seeds this user into the demo org so the demo logs in with one click.
 DEMO_USER_EMAIL = os.environ.get("PALISADE_DEMO_USER_EMAIL", "demo@palisade.local")
