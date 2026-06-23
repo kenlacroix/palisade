@@ -17,6 +17,11 @@
 
 </div>
 
+> **What's new in v0.1.3** — the first signed release. Agent binaries ship with
+> minisign-signed checksums that the [install script](https://trypalisade.dev/install)
+> verifies against a pinned public key (fail-closed with `PALISADE_REQUIRE_SIGNATURE`).
+> [Release notes](https://github.com/kenlacroix/palisade/releases/tag/v0.1.3) · [Changelog](CHANGELOG.md)
+
 A **pull-only** agent enrolls once, discovers listening services on-host, and
 runs CVE detections locally — **only normalized findings ever leave the host**.
 A FastAPI control plane serves a signed detection catalog, ingests findings,
