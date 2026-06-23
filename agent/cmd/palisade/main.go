@@ -25,7 +25,7 @@ import (
 )
 
 // version is the reported agent version.
-const version = "0.1.2"
+const version = "0.1.3"
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
