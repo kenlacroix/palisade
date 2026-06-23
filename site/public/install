@@ -16,11 +16,11 @@ BIN="palisade"
 # on each release. Override with PALISADE_VERSION=latest to track the newest.
 VERSION="${PALISADE_VERSION:-v0.1.2}"
 
-# Pinned minisign public key for release SHA256SUMS. When set, the installer
-# verifies the signature on SHA256SUMS before trusting any checksum. Leave empty
-# until a signing key is provisioned (see docs/release-signing.md); empty means
-# checksum-only verification. Override for testing with PALISADE_MINISIGN_PUBKEY.
-MINISIGN_PUBKEY="${PALISADE_MINISIGN_PUBKEY:-}"
+# Pinned minisign public key for release SHA256SUMS. The installer verifies the
+# signature on SHA256SUMS before trusting any checksum (see docs/release-signing.md).
+# Override for testing with PALISADE_MINISIGN_PUBKEY; set PALISADE_REQUIRE_SIGNATURE
+# to fail closed when a signature is missing.
+MINISIGN_PUBKEY="${PALISADE_MINISIGN_PUBKEY:-RWTFbgXBpSvo0JBsv9Lc+Tldsv2Em3K2xPLqxwjqi3i+4MZR09BYpC7S}"
 
 log() { printf '[palisade] %s\n' "$1" >&2; }
 die() { printf '[palisade] error: %s\n' "$1" >&2; exit 1; }

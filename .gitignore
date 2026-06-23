@@ -19,3 +19,7 @@ agent/.palisade/
 
 # Agent runtime state
 .palisade/
+
+# Release signing keys (never commit; the secret lives in GitHub Actions secrets)
+minisign.key
+minisign.pub
