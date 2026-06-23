@@ -55,7 +55,7 @@ order — but pin the key before cutting the first signed release.
 ```sh
 curl -fsSLO https://github.com/kenlacroix/palisade/releases/latest/download/SHA256SUMS
 curl -fsSLO https://github.com/kenlacroix/palisade/releases/latest/download/SHA256SUMS.minisig
-minisign -Vm SHA256SUMS -P "RW...."   # the pinned public key
+minisign -Vm SHA256SUMS -P "RWTFbgXBpSvo0JBsv9Lc+Tldsv2Em3K2xPLqxwjqi3i+4MZR09BYpC7S"
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 
