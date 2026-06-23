@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-22
+
+### Added
+
+- Signed releases: the minisign signing key is provisioned and its public key is
+  pinned in the installer, so `curl | sh` verifies `SHA256SUMS.minisig` against a
+  known key (set `PALISADE_REQUIRE_SIGNATURE` to fail closed when a signature is
+  missing).
+
 ## [0.1.2] - 2026-06-22
 
 ### Added
@@ -74,7 +83,8 @@ Initial release.
 - **Demo**: one-command `make demo` full stack with a seeded org and a live
   agent loop against a fake-vulnerable target.
 
-[Unreleased]: https://github.com/kenlacroix/palisade/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/kenlacroix/palisade/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/kenlacroix/palisade/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/kenlacroix/palisade/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/kenlacroix/palisade/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/kenlacroix/palisade/releases/tag/v0.1.0
